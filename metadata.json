@@ -1,0 +1,6 @@
+{
+  "name": "NeuroGuia",
+  "description": "Plataforma acessível para aprendizagem e autorregulação de alunos neurodivergentes, com salas de aula para tutores, mascote Foxie, rotinas, missões gamificadas e apoio SOS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
