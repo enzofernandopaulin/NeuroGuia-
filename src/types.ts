@@ -1,5 +1,6 @@
 export type AppView =
   | 'welcome'
+  | 'reset-password'
   | 'responsavel-onboarding'
   | 'responsavel-dashboard'
   | 'tea-home';
