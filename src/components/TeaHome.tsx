@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { RoutineTask, TeaProfile, UserRole } from '../types';
+import { getSupportPreset } from '../lib/supportPresets';
 
 interface Props {
   profile: TeaProfile;
@@ -18,6 +19,7 @@ export const TeaHome: React.FC<Props> = ({
   const [activeTask, setActiveTask] = useState<RoutineTask | undefined>(nextTask);
   const [stepIndex, setStepIndex] = useState(0);
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const supportPreset = getSupportPreset(profile.supportLevel);
 
   const soundSensitive = profile.sensoryTriggers.includes('sons');
   const visualSensitive = profile.softVisualMode;
@@ -63,8 +65,10 @@ export const TeaHome: React.FC<Props> = ({
 
   const remaining = tasks.filter((task) => !task.completed);
   const visibleLater = useMemo(
-    () => remaining.filter((task) => task.id !== activeTask?.id && task.id !== nextTask?.id),
-    [remaining, activeTask?.id, nextTask?.id]
+    () => remaining
+      .filter((task) => task.id !== activeTask?.id && task.id !== nextTask?.id)
+      .slice(0, supportPreset.maxLaterTasks),
+    [remaining, activeTask?.id, nextTask?.id, supportPreset.maxLaterTasks]
   );
 
   const surface = visualSensitive ? 'bg-[#fafaf7] border-[#d8d8d0]' : 'bg-white border-outline-variant/60';

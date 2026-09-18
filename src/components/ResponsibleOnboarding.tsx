@@ -7,6 +7,7 @@ import {
   SupportLevel,
   TeaProfile,
 } from '../types';
+import { applySupportPreset, getSupportPreset } from '../lib/supportPresets';
 
 interface Props {
   initialProfile: TeaProfile;
@@ -26,6 +27,7 @@ const sensoryOptions: { value: SensoryTrigger; label: string }[] = [
 export const ResponsibleOnboarding: React.FC<Props> = ({ initialProfile, onBack, onComplete }) => {
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState<TeaProfile>(initialProfile);
+  const supportPreset = getSupportPreset(profile.supportLevel);
 
   const total = 7;
   const progress = useMemo(() => Math.round(((step + 1) / total) * 100), [step]);
@@ -104,8 +106,9 @@ export const ResponsibleOnboarding: React.FC<Props> = ({ initialProfile, onBack,
                 ['nivel-3', 'Nível 3 — requer suporte muito substancial'],
                 ['nao-informado', 'Não sei / prefiro não informar'],
               ] as [SupportLevel, string][]).map(([value, label]) => (
-                <button key={value} onClick={() => setProfile({ ...profile, supportLevel: value })} className={`w-full text-left p-4 rounded-2xl border-2 font-bold ${profile.supportLevel === value ? 'border-primary bg-primary-fixed' : 'border-outline-variant'}`}>
-                  {label}
+                <button key={value} onClick={() => setProfile((current) => applySupportPreset(current, value))} className={`w-full text-left p-4 rounded-2xl border-2 ${profile.supportLevel === value ? 'border-primary bg-primary-fixed' : 'border-outline-variant'}`}>
+                  <span className="font-bold block">{label}</span>
+                  <span className="text-xs text-on-surface-variant block mt-1">{getSupportPreset(value).description}</span>
                 </button>
               ))}
             </div>
@@ -186,7 +189,8 @@ export const ResponsibleOnboarding: React.FC<Props> = ({ initialProfile, onBack,
         {step === 6 && (
           <>
             <h1 className="text-2xl font-extrabold">Configuração sugerida</h1>
-            <p className="text-sm text-on-surface-variant mt-2 mb-5">O responsável continua no controle e poderá alterar tudo depois.</p>
+            <p className="text-sm text-on-surface-variant mt-2">{supportPreset.title}</p>
+            <p className="text-sm text-on-surface-variant mt-1 mb-5">O nível define apenas o ponto de partida. O responsável continua no controle e poderá alterar tudo depois.</p>
             <div className="space-y-3">
               <div className="rounded-2xl bg-surface-container-low p-4"><strong>Interface sensorial:</strong> {profile.sensoryTriggers.length ? 'modo suave quando necessário' : 'padrão'}</div>
               <div className="rounded-2xl bg-surface-container-low p-4"><strong>Apresentação:</strong> {profile.communicationPreference.replace('-', ' + ')}</div>
