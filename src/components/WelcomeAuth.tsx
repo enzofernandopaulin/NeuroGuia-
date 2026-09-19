@@ -9,14 +9,12 @@ import {
 
 interface Props {
   onResponsibleAuthenticated: (name: string, isNewAccount: boolean) => Promise<void> | void;
-  onTeaAccess: () => Promise<void> | void;
-  externalNotice?: string;
+  onTeaAccess: () => void;
 }
 
 export const WelcomeAuth: React.FC<Props> = ({
   onResponsibleAuthenticated,
   onTeaAccess,
-  externalNotice,
 }) => {
   const [role, setRole] = useState<UserRole>('responsavel');
   const [tab, setTab] = useState<'entrar' | 'cadastrar'>('entrar');
@@ -32,10 +30,7 @@ export const WelcomeAuth: React.FC<Props> = ({
     setFeedback(null);
 
     if (role === 'tea') {
-      setLoading(true);
-      try { await onTeaAccess(); }
-      catch { setFeedback({ type: 'error', text: 'Não foi possível abrir o acesso do estudante. Tente novamente.' }); }
-      finally { setLoading(false); }
+      onTeaAccess();
       return;
     }
 
@@ -71,16 +66,10 @@ export const WelcomeAuth: React.FC<Props> = ({
     try {
       if (tab === 'cadastrar') {
         const result = await signUpResponsible(name, email, password);
-        if (result.needsEmailConfirmation) {
-          setFeedback({
-            type: 'success',
-            text: 'Conta criada. Confira seu e-mail para confirmar o cadastro antes de entrar.',
-          });
-          setTab('entrar');
-          setPassword('');
-        } else {
-          await onResponsibleAuthenticated(name, true);
+        if (!result.session) {
+          throw new Error('A conta foi criada, mas a sessão não foi iniciada. Verifique a configuração de confirmação de e-mail no Supabase.');
         }
+        await onResponsibleAuthenticated(name, true);
       } else {
         const data = await signInResponsible(email, password);
         const displayName =
@@ -140,8 +129,6 @@ export const WelcomeAuth: React.FC<Props> = ({
         </div>
 
         <section className="bg-white rounded-3xl border border-outline-variant/60 shadow-sm p-5">
-          {externalNotice && <p role="alert" className="mb-4 rounded-2xl bg-error-container p-3 text-sm font-bold text-on-error-container">{externalNotice}</p>}
-          {externalNotice && <button type="button" onClick={() => window.location.reload()} className="mb-4 text-primary font-bold text-sm">Tentar carregar novamente</button>}
           <div className="grid grid-cols-2 gap-2 bg-surface-container-low rounded-2xl p-1.5 mb-5">
             <button type="button" onClick={() => { setTab('entrar'); setFeedback(null); }} className={`py-3 rounded-xl font-bold text-sm ${tab === 'entrar' ? 'bg-white shadow-sm' : 'text-on-surface-variant'}`}>Entrar</button>
             <button type="button" onClick={() => { setTab('cadastrar'); setRole('responsavel'); setFeedback(null); }} className={`py-3 rounded-xl font-bold text-sm ${tab === 'cadastrar' ? 'bg-white shadow-sm' : 'text-on-surface-variant'}`}>Cadastrar estudante com TEA</button>
@@ -189,7 +176,7 @@ export const WelcomeAuth: React.FC<Props> = ({
 
             {role === 'tea' && (
               <div className="rounded-2xl bg-secondary-fixed/60 p-4 text-sm">
-                Use o código e o PIN que o responsável configurou para o seu perfil.
+                O acesso TEA ainda é temporário nesta etapa. O código de vínculo com o responsável será implementado no tópico 3.
               </div>
             )}
 
