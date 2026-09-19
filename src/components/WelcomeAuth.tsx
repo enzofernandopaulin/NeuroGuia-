@@ -8,7 +8,7 @@ import {
 } from '../services/authService';
 
 interface Props {
-  onResponsibleAuthenticated: (name: string, isNewAccount: boolean) => void;
+  onResponsibleAuthenticated: (name: string, isNewAccount: boolean) => Promise<void> | void;
   onTeaAccess: () => void;
 }
 
@@ -74,7 +74,7 @@ export const WelcomeAuth: React.FC<Props> = ({
           setTab('entrar');
           setPassword('');
         } else {
-          onResponsibleAuthenticated(name, true);
+          await onResponsibleAuthenticated(name, true);
         }
       } else {
         const data = await signInResponsible(email, password);
@@ -82,7 +82,7 @@ export const WelcomeAuth: React.FC<Props> = ({
           String(data.user?.user_metadata?.full_name || '').trim() ||
           data.user?.email?.split('@')[0] ||
           'Responsável';
-        onResponsibleAuthenticated(displayName, false);
+        await onResponsibleAuthenticated(displayName, false);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Não foi possível concluir a autenticação.';
