@@ -11,6 +11,7 @@ export interface TeaProfileRow {
   id: string;
   responsible_id: string;
   name: string;
+  avatar_url: string | null;
   age_group: TeaProfile['ageGroup'];
   support_level: SupportLevel;
   communication_preference: CommunicationPreference;
