@@ -39,9 +39,12 @@ export interface TeaProfile {
 
 export interface RoutineTask {
   id: string;
+  profileId: string;
   title: string;
   time: string;
   completed: boolean;
   category?: string;
   steps?: string[];
+  stepIds?: string[];
+  completedSteps?: boolean[];
 }

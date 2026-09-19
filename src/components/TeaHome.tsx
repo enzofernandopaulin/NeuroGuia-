@@ -6,20 +6,23 @@ interface Props {
   profile: TeaProfile;
   tasks: RoutineTask[];
   nextTask?: RoutineTask;
-  onToggleTask: (id: string) => void;
+  onToggleTask: (id: string) => Promise<void>;
+  onCompleteStep: (taskId: string, stepIndex: number) => Promise<void>;
   onBackToResponsible: () => void;
   onStudentLogout: () => void;
   role: UserRole;
 }
 
 export const TeaHome: React.FC<Props> = ({
-  profile, tasks, nextTask, onToggleTask, onBackToResponsible, onStudentLogout, role,
+  profile, tasks, nextTask, onToggleTask, onCompleteStep, onBackToResponsible, onStudentLogout, role,
 }) => {
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpMessage, setHelpMessage] = useState('');
   const [activeTask, setActiveTask] = useState<RoutineTask | undefined>(nextTask);
   const [stepIndex, setStepIndex] = useState(0);
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [taskError, setTaskError] = useState('');
+  const [saving, setSaving] = useState(false);
   const supportPreset = getSupportPreset(profile.supportLevel);
 
   const soundSensitive = profile.sensoryTriggers.includes('sons');
@@ -46,17 +49,33 @@ export const TeaHome: React.FC<Props> = ({
 
   const startTask = (task: RoutineTask) => {
     setActiveTask(task);
-    setStepIndex(0);
+    setStepIndex(task.completedSteps?.findIndex(done => !done) === -1
+      ? 0 : Math.max(0, task.completedSteps?.findIndex(done => !done) ?? 0));
     setHelpOpen(false);
     setHelpMessage('');
     speak(task.steps?.[0] || task.title);
   };
 
-  const completeActive = () => {
-    if (activeTask) onToggleTask(activeTask.id);
-    setActiveTask(undefined);
-    setStepIndex(0);
-    setHelpMessage('Tarefa concluída. Muito bem!');
+  const completeActive = async () => {
+    if (!activeTask || saving) return;
+    setSaving(true); setTaskError('');
+    try {
+      await onToggleTask(activeTask.id);
+      setActiveTask(undefined); setStepIndex(0);
+      setHelpMessage('Tarefa concluída. Muito bem!');
+    } catch (cause) { setTaskError(cause instanceof Error ? cause.message : 'Não foi possível salvar a conclusão.'); }
+    finally { setSaving(false); }
+  };
+
+  const nextStep = async () => {
+    if (!activeTask || saving) return;
+    setSaving(true); setTaskError('');
+    try {
+      await onCompleteStep(activeTask.id, stepIndex);
+      const next = stepIndex + 1;
+      setStepIndex(next); speak(activeTask.steps?.[next] || '');
+    } catch (cause) { setTaskError(cause instanceof Error ? cause.message : 'Não foi possível salvar a etapa.'); }
+    finally { setSaving(false); }
   };
 
   const requestHelp = () => {
@@ -136,16 +155,17 @@ export const TeaHome: React.FC<Props> = ({
               <div className={`rounded-2xl p-6 text-xl font-extrabold ${visualSensitive ? 'bg-[#ecece6]' : 'bg-surface-container-low'}`}>{activeTask.steps[stepIndex]}</div>
               {audioEnabled && !soundSensitive && <button onClick={() => speak(activeTask.steps![stepIndex])} className="mt-3 rounded-xl border-2 border-outline-variant px-4 py-2 font-bold">🔊 Ouvir etapa</button>}
               {stepIndex < activeTask.steps.length - 1 ? (
-                <button onClick={() => { const next = stepIndex + 1; setStepIndex(next); speak(activeTask.steps![next]); }} className={`w-full mt-4 rounded-2xl py-4 font-extrabold ${visualSensitive ? 'bg-[#455348] text-white' : 'bg-primary text-white'}`}>Consegui, próxima etapa</button>
+                <button onClick={nextStep} disabled={saving} className={`w-full mt-4 rounded-2xl py-4 font-extrabold disabled:opacity-50 ${visualSensitive ? 'bg-[#455348] text-white' : 'bg-primary text-white'}`}>Consegui, próxima etapa</button>
               ) : (
-                <button onClick={completeActive} className="w-full mt-4 rounded-2xl bg-tertiary text-white py-4 font-extrabold">Terminei ✓</button>
+                <button onClick={completeActive} disabled={saving} className="w-full mt-4 rounded-2xl bg-tertiary text-white py-4 font-extrabold disabled:opacity-50">Terminei ✓</button>
               )}
             </div>
           ) : (
-            <button onClick={completeActive} className="w-full mt-6 rounded-2xl bg-tertiary text-white py-4 font-extrabold">Concluir tarefa ✓</button>
+            <button onClick={completeActive} disabled={saving} className="w-full mt-6 rounded-2xl bg-tertiary text-white py-4 font-extrabold disabled:opacity-50">Concluir tarefa ✓</button>
           )}
         </section>
       )}
+      {taskError && <p role="alert" className="text-error text-sm font-bold my-3">{taskError}</p>}
 
       {visibleLater.length > 0 && (
         <section className={`rounded-3xl border p-5 mb-5 ${surface}`}>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TeaProfileRow } from '../lib/database.types';
 import { signInStudent } from '../services/studentAccessService';
 
-interface Props { onLogin: (profile: TeaProfileRow) => void; onBack: () => void }
+interface Props { onLogin: (profile: TeaProfileRow) => Promise<void>; onBack: () => void }
 
 export const StudentLogin: React.FC<Props> = ({ onLogin, onBack }) => {
   const [code, setCode] = useState('');
@@ -11,7 +11,7 @@ export const StudentLogin: React.FC<Props> = ({ onLogin, onBack }) => {
   const [loading, setLoading] = useState(false);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault(); setError(''); setLoading(true);
-    try { onLogin(await signInStudent(code, pin)); }
+    try { await onLogin(await signInStudent(code, pin)); }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível entrar.'); }
     finally { setLoading(false); }
   };

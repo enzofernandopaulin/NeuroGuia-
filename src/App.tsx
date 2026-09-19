@@ -8,6 +8,8 @@ import { TeaHome } from './components/TeaHome';
 import { StudentLogin } from './components/StudentLogin';
 import { getStudentProfile, signOutStudent } from './services/studentAccessService';
 import { TeaProfileRow } from './lib/database.types';
+import { studentClient } from './services/studentAccessService';
+import { completeRoutineStep, deleteRoutineTask, loadRoutine, saveRoutineTask, setRoutineCompleted } from './services/routineService';
 import { supabase } from './lib/supabase';
 import { getCurrentSession, signOutResponsible } from './services/authService';
 import {
@@ -32,19 +34,13 @@ const defaultProfile: TeaProfile = {
   routineChangeWarning: true,
 };
 
-const initialTasks: RoutineTask[] = [
-  { id: '1', title: 'Escovar os dentes', time: '07:30', completed: false, category: 'Autocuidado', steps: ['Pegue a escova', 'Coloque a pasta', 'Escove os dentes', 'Enxágue'] },
-  { id: '2', title: 'Preparar a mochila', time: '08:00', completed: false, category: 'Rotina', steps: ['Pegue a mochila', 'Separe os materiais', 'Confira o que falta'] },
-  { id: '3', title: 'Fazer a atividade', time: '15:30', completed: false, category: 'Estudo', steps: ['Abra a atividade', 'Leia a primeira questão', 'Comece pela etapa mais simples'] },
-];
-
 export default function App() {
   const [view, setView] = useState<AppView>('welcome');
   const [role, setRole] = useState<UserRole>('responsavel');
   const [responsibleName, setResponsibleName] = useState('Responsável');
   const [profile, setProfile] = useState<TeaProfile>(defaultProfile);
   const [profileId, setProfileId] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<RoutineTask[]>(initialTasks);
+  const [tasks, setTasks] = useState<RoutineTask[]>([]);
   const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
@@ -56,7 +52,8 @@ export default function App() {
         if (!mounted) return;
         if (studentProfile) {
           setRole('tea'); setProfileId(studentProfile.id);
-          setProfile(mapTeaProfileRow(studentProfile)); setTasks([]);
+          setProfile(mapTeaProfileRow(studentProfile));
+          setTasks(await loadRoutine(studentProfile.id, studentClient!));
           setView('tea-home'); return;
         }
         const session = await getCurrentSession();
@@ -71,6 +68,7 @@ export default function App() {
         if (profiles.length > 0) {
           setProfileId(profiles[0].id);
           setProfile(mapTeaProfileRow(profiles[0]));
+          setTasks(await loadRoutine(profiles[0].id));
           setView('responsavel-dashboard');
         } else {
           setView('responsavel-onboarding');
@@ -115,21 +113,33 @@ export default function App() {
 
   const nextTask = useMemo(() => tasks.find((task) => !task.completed), [tasks]);
 
-  const toggleTask = (id: string) => {
-    setTasks((current) => current.map((task) => task.id === id ? { ...task, completed: !task.completed } : task));
+  const toggleTask = async (id: string) => {
+    const task = tasks.find(item => item.id === id);
+    if (!task) return;
+    await setRoutineCompleted(task, !task.completed, role === 'tea' ? studentClient! : undefined);
+    setTasks(current => current.map(item => item.id === id ? { ...item, completed: !task.completed } : item));
   };
 
-  const addTask = (title: string, time: string, steps: string[]) => {
-    const cleanTitle = title.trim();
-    if (!cleanTitle) return;
-    setTasks((current) => [...current, {
-      id: String(Date.now()),
-      title: cleanTitle,
-      time: time || 'Sem horário',
-      completed: false,
-      category: 'Rotina',
-      steps: steps.filter(Boolean),
-    }]);
+  const saveTask = async (task: Pick<RoutineTask, 'title' | 'time' | 'category' | 'steps'> & { id?: string }) => {
+    if (!profileId) throw new Error('Escolha um estudante primeiro.');
+    await saveRoutineTask(profileId, task);
+    setTasks(await loadRoutine(profileId));
+  };
+
+  const removeTask = async (id: string) => {
+    if (!profileId) return;
+    await deleteRoutineTask(id);
+    setTasks(await loadRoutine(profileId));
+  };
+
+  const completeStep = async (taskId: string, index: number) => {
+    const task = tasks.find(item => item.id === taskId);
+    const stepId = task?.stepIds?.[index];
+    if (!stepId) throw new Error('Etapa não encontrada.');
+    await completeRoutineStep(stepId, role === 'tea' ? studentClient! : undefined);
+    setTasks(current => current.map(item => item.id === taskId
+      ? { ...item, completedSteps: item.completedSteps?.map((done, i) => i === index ? true : done) }
+      : item));
   };
 
   const handleResponsibleAuthenticated = async (name: string, isNewAccount: boolean) => {
@@ -144,6 +154,7 @@ export default function App() {
     if (profiles.length > 0) {
       setProfileId(profiles[0].id);
       setProfile(mapTeaProfileRow(profiles[0]));
+      setTasks(await loadRoutine(profiles[0].id));
       setView('responsavel-dashboard');
     } else {
       setView('responsavel-onboarding');
@@ -154,12 +165,14 @@ export default function App() {
     if (profileId) {
       const saved = await updateTeaProfile(profileId, mapTeaProfileToUpdate(newProfile));
       setProfile(mapTeaProfileRow(saved));
+      setTasks(await loadRoutine(saved.id));
     } else {
       const session = await getCurrentSession();
       if (!session?.user) throw new Error('Sua sessão expirou. Entre novamente.');
       const saved = await createTeaProfile(newProfile, session.user.id);
       setProfileId(saved.id);
       setProfile(mapTeaProfileRow(saved));
+      setTasks([]);
     }
     setView('responsavel-dashboard');
   };
@@ -169,13 +182,15 @@ export default function App() {
       if (supabase) await signOutResponsible();
     } finally {
       setRole('responsavel');
+      setTasks([]); setProfileId(null);
       setView('welcome');
     }
   };
 
-  const handleStudentLogin = (studentProfile: TeaProfileRow) => {
+  const handleStudentLogin = async (studentProfile: TeaProfileRow) => {
+    const studentTasks = await loadRoutine(studentProfile.id, studentClient!);
     setRole('tea'); setProfileId(studentProfile.id);
-    setProfile(mapTeaProfileRow(studentProfile)); setTasks([]);
+    setProfile(mapTeaProfileRow(studentProfile)); setTasks(studentTasks);
     setView('tea-home');
   };
 
@@ -229,7 +244,8 @@ export default function App() {
           profile={profile}
           tasks={tasks}
           onToggleTask={toggleTask}
-          onAddTask={addTask}
+          onSaveTask={saveTask}
+          onDeleteTask={removeTask}
           onEditProfile={() => setView('responsavel-onboarding')}
           onOpenTeaView={() => setView('tea-home')}
           onLogout={handleLogout}
@@ -242,6 +258,7 @@ export default function App() {
           tasks={tasks}
           nextTask={nextTask}
           onToggleTask={toggleTask}
+          onCompleteStep={completeStep}
           onBackToResponsible={() => setView('responsavel-dashboard')}
           onStudentLogout={handleStudentLogout}
           role={role}
