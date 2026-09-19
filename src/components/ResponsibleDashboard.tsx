@@ -6,6 +6,9 @@ interface Props {
   responsibleName: string;
   profile: TeaProfile;
   profileId: string;
+  profiles: { id: string; name: string }[];
+  onSelectProfile: (id: string) => Promise<void>;
+  onAddStudent: () => void;
   tasks: RoutineTask[];
   onToggleTask: (id: string) => Promise<void>;
   onSaveTask: (task: Pick<RoutineTask, 'title' | 'time' | 'category' | 'steps'> & { id?: string }) => Promise<void>;
@@ -19,6 +22,9 @@ export const ResponsibleDashboard: React.FC<Props> = ({
   responsibleName,
   profile,
   profileId,
+  profiles,
+  onSelectProfile,
+  onAddStudent,
   tasks,
   onToggleTask,
   onSaveTask,
@@ -33,6 +39,7 @@ export const ResponsibleDashboard: React.FC<Props> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [switching, setSwitching] = useState(false);
 
   const completed = tasks.filter((task) => task.completed).length;
 
@@ -62,6 +69,13 @@ export const ResponsibleDashboard: React.FC<Props> = ({
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Erro ao atualizar tarefa.'); }
   };
 
+  const switchProfile = async (id: string) => {
+    setError(''); setSwitching(true);
+    try { await onSelectProfile(id); }
+    catch { setError('Não foi possível abrir o perfil. Tente novamente.'); }
+    finally { setSwitching(false); }
+  };
+
   return (
     <main className="min-h-screen max-w-5xl mx-auto px-5 py-7">
       <header className="flex flex-wrap gap-3 items-center justify-between mb-7">
@@ -74,6 +88,17 @@ export const ResponsibleDashboard: React.FC<Props> = ({
           <button onClick={onLogout} className="rounded-2xl border border-outline-variant font-bold px-4 py-3">Sair</button>
         </div>
       </header>
+
+      <div className="flex flex-wrap items-center gap-3 mb-5">
+        {profiles.length > 1 && <label className="font-bold">Estudante
+          <select value={profileId} disabled={switching} onChange={e => switchProfile(e.target.value)}
+            className="block mt-1 rounded-xl border-2 border-outline-variant p-3">
+            {profiles.map(student => <option key={student.id} value={student.id}>{student.name}</option>)}
+          </select>
+        </label>}
+        <button onClick={onAddStudent} className="rounded-xl border-2 border-primary text-primary font-bold px-4 py-3">Adicionar estudante</button>
+      </div>
+      {error && <p role="alert" className="mb-4 text-error font-bold text-sm">{error}</p>}
 
       <div className="grid lg:grid-cols-3 gap-5">
         <section className="lg:col-span-2 bg-white rounded-3xl border border-outline-variant/60 p-5">
@@ -128,7 +153,6 @@ export const ResponsibleDashboard: React.FC<Props> = ({
         <textarea value={stepsText} onChange={(e) => setStepsText(e.target.value)} placeholder={'Etapas, uma por linha\nEx.: Pegue a escova\nColoque a pasta'} className="w-full min-h-28 rounded-2xl border-2 border-outline-variant p-4 mt-3" />
         <button onClick={save} disabled={saving} className="mt-3 rounded-2xl bg-primary text-white font-extrabold px-6 py-3.5 disabled:opacity-50">{saving ? 'Salvando...' : editingId ? 'Salvar alterações' : 'Adicionar tarefa'}</button>
         {editingId && <button onClick={() => { setEditingId(null); setTitle(''); setTime(''); setStepsText(''); }} className="ml-3 text-primary font-bold">Cancelar edição</button>}
-        {error && <p role="alert" className="mt-3 text-error font-bold text-sm">{error}</p>}
       </section>
     </main>
   );

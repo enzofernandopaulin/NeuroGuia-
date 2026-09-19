@@ -9,12 +9,14 @@ import {
 
 interface Props {
   onResponsibleAuthenticated: (name: string, isNewAccount: boolean) => Promise<void> | void;
-  onTeaAccess: () => void;
+  onTeaAccess: () => Promise<void> | void;
+  externalNotice?: string;
 }
 
 export const WelcomeAuth: React.FC<Props> = ({
   onResponsibleAuthenticated,
   onTeaAccess,
+  externalNotice,
 }) => {
   const [role, setRole] = useState<UserRole>('responsavel');
   const [tab, setTab] = useState<'entrar' | 'cadastrar'>('entrar');
@@ -30,7 +32,10 @@ export const WelcomeAuth: React.FC<Props> = ({
     setFeedback(null);
 
     if (role === 'tea') {
-      onTeaAccess();
+      setLoading(true);
+      try { await onTeaAccess(); }
+      catch { setFeedback({ type: 'error', text: 'Não foi possível abrir o acesso do estudante. Tente novamente.' }); }
+      finally { setLoading(false); }
       return;
     }
 
@@ -135,6 +140,8 @@ export const WelcomeAuth: React.FC<Props> = ({
         </div>
 
         <section className="bg-white rounded-3xl border border-outline-variant/60 shadow-sm p-5">
+          {externalNotice && <p role="alert" className="mb-4 rounded-2xl bg-error-container p-3 text-sm font-bold text-on-error-container">{externalNotice}</p>}
+          {externalNotice && <button type="button" onClick={() => window.location.reload()} className="mb-4 text-primary font-bold text-sm">Tentar carregar novamente</button>}
           <div className="grid grid-cols-2 gap-2 bg-surface-container-low rounded-2xl p-1.5 mb-5">
             <button type="button" onClick={() => { setTab('entrar'); setFeedback(null); }} className={`py-3 rounded-xl font-bold text-sm ${tab === 'entrar' ? 'bg-white shadow-sm' : 'text-on-surface-variant'}`}>Entrar</button>
             <button type="button" onClick={() => { setTab('cadastrar'); setRole('responsavel'); setFeedback(null); }} className={`py-3 rounded-xl font-bold text-sm ${tab === 'cadastrar' ? 'bg-white shadow-sm' : 'text-on-surface-variant'}`}>Cadastrar estudante com TEA</button>

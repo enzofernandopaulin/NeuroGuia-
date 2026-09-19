@@ -44,15 +44,39 @@ export default function App() {
   const [responsibleName, setResponsibleName] = useState('Responsável');
   const [profile, setProfile] = useState<TeaProfile>(defaultProfile);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<TeaProfileRow[]>([]);
+  const [lastProfileId, setLastProfileId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<RoutineTask[]>([]);
   const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState('');
+
+  const openResponsibleProfiles = async (preferredId?: string, navigate = true) => {
+    const rows = await listTeaProfiles();
+    setProfiles(rows);
+    if (!rows.length) {
+      setProfileId(null); setProfile(defaultProfile); setTasks([]);
+      if (navigate) setView('responsavel-onboarding');
+      return;
+    }
+    const selected = rows.find(row => row.id === preferredId) ?? rows[0];
+    const routine = await loadRoutine(selected.id);
+    setAuthError('');
+    setProfileId(selected.id); setProfile(mapTeaProfileRow(selected)); setTasks(routine);
+    if (navigate) setView('responsavel-dashboard');
+  };
 
   useEffect(() => {
     let mounted = true;
+    let recoveryRequested = new URLSearchParams(window.location.hash.slice(1)).get('type') === 'recovery';
+    const redirectError = new URLSearchParams(window.location.hash.slice(1)).get('error_code');
+    if (redirectError) {
+      setAuthError('O link de acesso expirou ou não é válido. Solicite outro no formulário de entrada.');
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
 
     const bootstrap = async () => {
       try {
-        const studentProfile = await getStudentProfile();
+        const studentProfile = studentClient ? await getStudentProfile() : null;
         if (!mounted) return;
         if (studentProfile) {
           setRole('tea'); setProfileId(studentProfile.id);
@@ -61,21 +85,22 @@ export default function App() {
           setView('tea-home'); return;
         }
         const session = await getCurrentSession();
-        if (!mounted || !session?.user) return;
+        if (!mounted || !session?.user) {
+          if (recoveryRequested) setAuthError('O link de recuperação expirou. Solicite outro no formulário de entrada.');
+          return;
+        }
         setRole('responsavel');
         setResponsibleName(
           String(session.user.user_metadata?.full_name || '').trim() ||
             session.user.email?.split('@')[0] ||
             'Responsável'
         );
-        const profiles = await listTeaProfiles();
-        if (profiles.length > 0) {
-          setProfileId(profiles[0].id);
-          setProfile(mapTeaProfileRow(profiles[0]));
-          setTasks(await loadRoutine(profiles[0].id));
-          setView('responsavel-dashboard');
-        } else {
-          setView('responsavel-onboarding');
+        await openResponsibleProfiles(undefined, !recoveryRequested);
+        if (recoveryRequested) setView('reset-password');
+      } catch {
+        if (mounted) {
+          setAuthError('Não foi possível carregar seus dados. Verifique a conexão e tente novamente.');
+          setView('welcome');
         }
       } finally {
         if (mounted) setAuthReady(true);
@@ -86,13 +111,14 @@ export default function App() {
       if (!mounted) return;
 
       if (event === 'PASSWORD_RECOVERY') {
+        recoveryRequested = true;
         setView('reset-password');
         setAuthReady(true);
         return;
       }
 
       if (event === 'SIGNED_OUT') {
-        setRole('responsavel');
+        setRole('responsavel'); setProfileId(null); setProfiles([]); setTasks([]);
         setView('welcome');
         setAuthReady(true);
         return;
@@ -147,6 +173,7 @@ export default function App() {
   };
 
   const handleResponsibleAuthenticated = async (name: string, isNewAccount: boolean) => {
+    setAuthError('');
     setRole('responsavel');
     setResponsibleName(name.trim() || 'Responsável');
     if (isNewAccount) {
@@ -154,40 +181,51 @@ export default function App() {
       return;
     }
 
-    const profiles = await listTeaProfiles();
-    if (profiles.length > 0) {
-      setProfileId(profiles[0].id);
-      setProfile(mapTeaProfileRow(profiles[0]));
-      setTasks(await loadRoutine(profiles[0].id));
-      setView('responsavel-dashboard');
+    await openResponsibleProfiles();
+  };
+
+  const selectProfile = async (id: string) => {
+    await openResponsibleProfiles(id);
+  };
+
+  const startNewProfile = () => {
+    setLastProfileId(profileId); setProfileId(null);
+    setProfile(defaultProfile); setTasks([]);
+    setView('responsavel-onboarding');
+  };
+
+  const cancelOnboarding = async () => {
+    if (profiles.length) {
+      await openResponsibleProfiles(lastProfileId ?? profiles[0].id);
     } else {
-      setView('responsavel-onboarding');
+      if (supabase) await signOutResponsible();
+      setView('welcome');
     }
   };
 
   const handleProfileComplete = async (newProfile: TeaProfile) => {
+    let savedId: string;
     if (profileId) {
       const saved = await updateTeaProfile(profileId, mapTeaProfileToUpdate(newProfile));
-      setProfile(mapTeaProfileRow(saved));
-      setTasks(await loadRoutine(saved.id));
+      savedId = saved.id;
     } else {
       const session = await getCurrentSession();
       if (!session?.user) throw new Error('Sua sessão expirou. Entre novamente.');
       const saved = await createTeaProfile(newProfile, session.user.id);
-      setProfileId(saved.id);
-      setProfile(mapTeaProfileRow(saved));
-      setTasks([]);
+      savedId = saved.id;
     }
-    setView('responsavel-dashboard');
+    await openResponsibleProfiles(savedId);
   };
 
   const handleLogout = async () => {
     try {
       if (supabase) await signOutResponsible();
-    } finally {
+      setAuthError('');
       setRole('responsavel');
-      setTasks([]); setProfileId(null);
+      setTasks([]); setProfileId(null); setProfiles([]); setProfile(defaultProfile);
       setView('welcome');
+    } catch {
+      setAuthError('Não foi possível sair. Verifique a conexão e tente novamente.');
     }
   };
 
@@ -199,10 +237,13 @@ export default function App() {
   };
 
   const handleStudentLogout = async () => {
-    try { await signOutStudent(); }
-    finally {
+    try {
+      await signOutStudent();
+      setAuthError('');
       setRole('responsavel'); setProfileId(null);
       setProfile(defaultProfile); setTasks([]); setView('welcome');
+    } catch {
+      setAuthError('Não foi possível sair. Verifique a conexão e tente novamente.');
     }
   };
 
@@ -219,11 +260,14 @@ export default function App() {
 
   return (
     <div className={profile.softVisualMode ? 'min-h-screen bg-[#f5f5ef] text-[#273029]' : 'min-h-screen bg-background text-on-surface'}>
+      {authError && view !== 'welcome' && <div role="alert" className="mx-auto max-w-3xl p-3 text-sm font-bold bg-error-container text-on-error-container">{authError}</div>}
       {view === 'welcome' && (
         <WelcomeAuth
+          externalNotice={authError}
           onResponsibleAuthenticated={handleResponsibleAuthenticated}
           onTeaAccess={async () => {
-            if (supabase) await signOutResponsible();
+            if (await getCurrentSession()) await signOutResponsible();
+            setAuthError('');
             setRole('tea'); setView('student-login');
           }}
         />
@@ -231,13 +275,16 @@ export default function App() {
 
       {view === 'student-login' && <StudentLogin onLogin={handleStudentLogin} onBack={() => setView('welcome')} />}
 
-      {view === 'reset-password' && <ResetPassword onDone={() => setView('responsavel-dashboard')} />}
+      {view === 'reset-password' && <ResetPassword onDone={() => openResponsibleProfiles(profileId ?? undefined)} onCancel={async () => {
+        try { await signOutResponsible(); setView('welcome'); }
+        catch { setAuthError('Não foi possível sair. Verifique a conexão e tente novamente.'); }
+      }} />}
 
       {view === 'responsavel-onboarding' && (
         <ResponsibleOnboarding
           initialProfile={profile}
           isEditing={Boolean(profileId)}
-          onBack={() => setView('welcome')}
+          onBack={cancelOnboarding}
           onComplete={handleProfileComplete}
         />
       )}
@@ -246,7 +293,10 @@ export default function App() {
         <ResponsibleDashboard
           responsibleName={responsibleName}
           profileId={profileId!}
+          profiles={profiles.map(row => ({ id: row.id, name: row.name }))}
           profile={profile}
+          onSelectProfile={selectProfile}
+          onAddStudent={startNewProfile}
           tasks={tasks}
           onToggleTask={toggleTask}
           onSaveTask={saveTask}

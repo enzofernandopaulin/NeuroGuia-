@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { updateResponsiblePassword } from '../services/authService';
 
 interface Props {
-  onDone: () => void;
+  onDone: () => Promise<void>;
+  onCancel: () => Promise<void>;
 }
 
-export const ResetPassword: React.FC<Props> = ({ onDone }) => {
+export const ResetPassword: React.FC<Props> = ({ onDone, onCancel }) => {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [updated, setUpdated] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +30,7 @@ export const ResetPassword: React.FC<Props> = ({ onDone }) => {
     try {
       await updateResponsiblePassword(password);
       setFeedback('Senha alterada com sucesso.');
-      setTimeout(onDone, 700);
+      setUpdated(true);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Não foi possível alterar a senha.');
     } finally {
@@ -45,12 +47,19 @@ export const ResetPassword: React.FC<Props> = ({ onDone }) => {
         <h1 className="text-2xl font-extrabold">Criar nova senha</h1>
         <p className="text-sm text-on-surface-variant mt-2 mb-5">Digite uma nova senha para sua conta de responsável.</p>
 
-        <form onSubmit={submit} className="space-y-3">
+        {!updated && <form onSubmit={submit} className="space-y-3">
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" placeholder="Nova senha" className="w-full rounded-2xl border-2 border-outline-variant bg-surface-container-low px-4 py-3.5 outline-none focus:border-primary" />
           <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" placeholder="Confirmar nova senha" className="w-full rounded-2xl border-2 border-outline-variant bg-surface-container-low px-4 py-3.5 outline-none focus:border-primary" />
-          {feedback && <div className="rounded-2xl bg-surface-container-low p-3 text-sm font-bold">{feedback}</div>}
           <button disabled={loading} className="w-full rounded-2xl bg-primary text-white py-4 font-extrabold disabled:opacity-60">{loading ? 'Salvando...' : 'Salvar nova senha'}</button>
-        </form>
+        </form>}
+        {feedback && <div role="status" className="mt-4 rounded-2xl bg-surface-container-low p-3 text-sm font-bold">{feedback}</div>}
+        {updated && <button onClick={async () => {
+          setLoading(true);
+          try { await onDone(); }
+          catch { setFeedback('Não foi possível carregar seus perfis. Tente novamente.'); }
+          finally { setLoading(false); }
+        }} disabled={loading} className="mt-4 text-primary font-bold">Continuar para o painel</button>}
+        <button onClick={onCancel} className="block mt-4 text-on-surface-variant text-sm">Voltar à entrada</button>
       </section>
     </main>
   );
