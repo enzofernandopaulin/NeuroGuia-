@@ -3,6 +3,7 @@ export type AppView =
   | 'reset-password'
   | 'responsavel-onboarding'
   | 'responsavel-dashboard'
+  | 'student-login'
   | 'tea-home';
 
 export type UserRole = 'responsavel' | 'tea' | 'tutor';

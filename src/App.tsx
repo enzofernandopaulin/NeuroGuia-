@@ -5,6 +5,9 @@ import { ResetPassword } from './components/ResetPassword';
 import { ResponsibleOnboarding } from './components/ResponsibleOnboarding';
 import { ResponsibleDashboard } from './components/ResponsibleDashboard';
 import { TeaHome } from './components/TeaHome';
+import { StudentLogin } from './components/StudentLogin';
+import { getStudentProfile, signOutStudent } from './services/studentAccessService';
+import { TeaProfileRow } from './lib/database.types';
 import { supabase } from './lib/supabase';
 import { getCurrentSession, signOutResponsible } from './services/authService';
 import {
@@ -49,6 +52,13 @@ export default function App() {
 
     const bootstrap = async () => {
       try {
+        const studentProfile = await getStudentProfile();
+        if (!mounted) return;
+        if (studentProfile) {
+          setRole('tea'); setProfileId(studentProfile.id);
+          setProfile(mapTeaProfileRow(studentProfile)); setTasks([]);
+          setView('tea-home'); return;
+        }
         const session = await getCurrentSession();
         if (!mounted || !session?.user) return;
         setRole('responsavel');
@@ -163,6 +173,20 @@ export default function App() {
     }
   };
 
+  const handleStudentLogin = (studentProfile: TeaProfileRow) => {
+    setRole('tea'); setProfileId(studentProfile.id);
+    setProfile(mapTeaProfileRow(studentProfile)); setTasks([]);
+    setView('tea-home');
+  };
+
+  const handleStudentLogout = async () => {
+    try { await signOutStudent(); }
+    finally {
+      setRole('responsavel'); setProfileId(null);
+      setProfile(defaultProfile); setTasks([]); setView('welcome');
+    }
+  };
+
   if (!authReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-on-surface">
@@ -179,9 +203,14 @@ export default function App() {
       {view === 'welcome' && (
         <WelcomeAuth
           onResponsibleAuthenticated={handleResponsibleAuthenticated}
-          onTeaAccess={() => { setRole('tea'); setView('tea-home'); }}
+          onTeaAccess={async () => {
+            if (supabase) await signOutResponsible();
+            setRole('tea'); setView('student-login');
+          }}
         />
       )}
+
+      {view === 'student-login' && <StudentLogin onLogin={handleStudentLogin} onBack={() => setView('welcome')} />}
 
       {view === 'reset-password' && <ResetPassword onDone={() => setView('responsavel-dashboard')} />}
 
@@ -196,6 +225,7 @@ export default function App() {
       {view === 'responsavel-dashboard' && (
         <ResponsibleDashboard
           responsibleName={responsibleName}
+          profileId={profileId!}
           profile={profile}
           tasks={tasks}
           onToggleTask={toggleTask}
@@ -213,6 +243,7 @@ export default function App() {
           nextTask={nextTask}
           onToggleTask={toggleTask}
           onBackToResponsible={() => setView('responsavel-dashboard')}
+          onStudentLogout={handleStudentLogout}
           role={role}
         />
       )}

@@ -8,11 +8,12 @@ interface Props {
   nextTask?: RoutineTask;
   onToggleTask: (id: string) => void;
   onBackToResponsible: () => void;
+  onStudentLogout: () => void;
   role: UserRole;
 }
 
 export const TeaHome: React.FC<Props> = ({
-  profile, tasks, nextTask, onToggleTask, onBackToResponsible, role,
+  profile, tasks, nextTask, onToggleTask, onBackToResponsible, onStudentLogout, role,
 }) => {
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpMessage, setHelpMessage] = useState('');
@@ -81,6 +82,7 @@ export const TeaHome: React.FC<Props> = ({
         {role === 'responsavel' && (
           <button onClick={onBackToResponsible} className="rounded-2xl border-2 border-outline-variant px-4 py-2.5 font-bold text-sm">Área do responsável</button>
         )}
+        {role === 'tea' && <button onClick={onStudentLogout} className="rounded-2xl border-2 border-outline-variant px-4 py-2.5 font-bold text-sm">Sair</button>}
       </header>
 
       {soundSensitive && (

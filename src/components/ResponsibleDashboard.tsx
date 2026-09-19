@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { RoutineTask, TeaProfile } from '../types';
+import { StudentAccessSettings } from './StudentAccessSettings';
 
 interface Props {
   responsibleName: string;
   profile: TeaProfile;
+  profileId: string;
   tasks: RoutineTask[];
   onToggleTask: (id: string) => void;
   onAddTask: (title: string, time: string, steps: string[]) => void;
@@ -15,6 +17,7 @@ interface Props {
 export const ResponsibleDashboard: React.FC<Props> = ({
   responsibleName,
   profile,
+  profileId,
   tasks,
   onToggleTask,
   onAddTask,
@@ -83,6 +86,8 @@ export const ResponsibleDashboard: React.FC<Props> = ({
           </section>
         </aside>
       </div>
+
+      <StudentAccessSettings profileId={profileId} profileName={profile.name} />
 
       <section className="mt-5 bg-white rounded-3xl border border-outline-variant/60 p-5">
         <h2 className="text-xl font-extrabold">Criar nova tarefa</h2>
