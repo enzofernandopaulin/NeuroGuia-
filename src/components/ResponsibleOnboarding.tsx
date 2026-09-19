@@ -12,7 +12,7 @@ import { applySupportPreset, getSupportPreset } from '../lib/supportPresets';
 interface Props {
   initialProfile: TeaProfile;
   onBack: () => void;
-  onComplete: (profile: TeaProfile) => void;
+  onComplete: (profile: TeaProfile) => Promise<void> | void;
 }
 
 const sensoryOptions: { value: SensoryTrigger; label: string }[] = [
@@ -27,6 +27,8 @@ const sensoryOptions: { value: SensoryTrigger; label: string }[] = [
 export const ResponsibleOnboarding: React.FC<Props> = ({ initialProfile, onBack, onComplete }) => {
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState<TeaProfile>(initialProfile);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const supportPreset = getSupportPreset(profile.supportLevel);
 
   const total = 7;
@@ -41,7 +43,7 @@ export const ResponsibleOnboarding: React.FC<Props> = ({ initialProfile, onBack,
     }));
   };
 
-  const finish = () => {
+  const finish = async () => {
     const visualSensitive = profile.sensoryTriggers.some((item) =>
       ['cores', 'brilho', 'animacoes', 'excesso-informacao'].includes(item)
     );
@@ -51,13 +53,26 @@ export const ResponsibleOnboarding: React.FC<Props> = ({ initialProfile, onBack,
       profile.supportLevel === 'nivel-3' ||
       profile.autonomy !== 'alguns-lembretes';
 
-    onComplete({
-      ...profile,
-      softVisualMode: visualSensitive,
-      stepByStep: needsSteps,
-      helpButton: true,
-      routineChangeWarning: profile.routineChangeDifficulty !== 'nao',
-    });
+    setSaving(true);
+    setSaveError('');
+
+    try {
+      await onComplete({
+        ...profile,
+        softVisualMode: visualSensitive,
+        stepByStep: needsSteps,
+        helpButton: true,
+        routineChangeWarning: profile.routineChangeDifficulty !== 'nao',
+      });
+    } catch (error) {
+      setSaveError(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível salvar o perfil. Tente novamente.'
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -206,9 +221,16 @@ export const ResponsibleOnboarding: React.FC<Props> = ({ initialProfile, onBack,
           {step < total - 1 ? (
             <button onClick={() => setStep(step + 1)} className="flex-1 rounded-2xl bg-primary text-white py-3.5 font-extrabold">Continuar</button>
           ) : (
-            <button onClick={finish} className="flex-1 rounded-2xl bg-primary text-white py-3.5 font-extrabold">Usar esta configuração</button>
+            <button disabled={saving} onClick={finish} className="flex-1 rounded-2xl bg-primary text-white py-3.5 font-extrabold disabled:opacity-60">
+              {saving ? 'Salvando...' : 'Usar esta configuração'}
+            </button>
           )}
         </div>
+        {saveError && (
+          <div className="mt-4 rounded-2xl bg-error-container text-on-error-container p-3 text-sm font-bold">
+            {saveError}
+          </div>
+        )}
       </section>
     </main>
   );
