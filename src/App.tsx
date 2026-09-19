@@ -7,9 +7,16 @@ import { ResponsibleDashboard } from './components/ResponsibleDashboard';
 import { TeaHome } from './components/TeaHome';
 import { supabase } from './lib/supabase';
 import { getCurrentSession, signOutResponsible } from './services/authService';
+import {
+  createTeaProfile,
+  listTeaProfiles,
+  mapTeaProfileRow,
+  mapTeaProfileToUpdate,
+  updateTeaProfile,
+} from './services/teaProfileService';
 
 const defaultProfile: TeaProfile = {
-  name: 'Lucas',
+  name: '',
   ageGroup: 'adolescente',
   supportLevel: 'nao-informado',
   communicationPreference: 'texto-imagem',
@@ -33,6 +40,7 @@ export default function App() {
   const [role, setRole] = useState<UserRole>('responsavel');
   const [responsibleName, setResponsibleName] = useState('Responsável');
   const [profile, setProfile] = useState<TeaProfile>(defaultProfile);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<RoutineTask[]>(initialTasks);
   const [authReady, setAuthReady] = useState(false);
 
@@ -49,7 +57,14 @@ export default function App() {
             session.user.email?.split('@')[0] ||
             'Responsável'
         );
-        setView('responsavel-dashboard');
+        const profiles = await listTeaProfiles();
+        if (profiles.length > 0) {
+          setProfileId(profiles[0].id);
+          setProfile(mapTeaProfileRow(profiles[0]));
+          setView('responsavel-dashboard');
+        } else {
+          setView('responsavel-onboarding');
+        }
       } finally {
         if (mounted) setAuthReady(true);
       }
@@ -107,10 +122,36 @@ export default function App() {
     }]);
   };
 
-  const handleResponsibleAuthenticated = (name: string, isNewAccount: boolean) => {
+  const handleResponsibleAuthenticated = async (name: string, isNewAccount: boolean) => {
     setRole('responsavel');
     setResponsibleName(name.trim() || 'Responsável');
-    setView(isNewAccount ? 'responsavel-onboarding' : 'responsavel-dashboard');
+    if (isNewAccount) {
+      setView('responsavel-onboarding');
+      return;
+    }
+
+    const profiles = await listTeaProfiles();
+    if (profiles.length > 0) {
+      setProfileId(profiles[0].id);
+      setProfile(mapTeaProfileRow(profiles[0]));
+      setView('responsavel-dashboard');
+    } else {
+      setView('responsavel-onboarding');
+    }
+  };
+
+  const handleProfileComplete = async (newProfile: TeaProfile) => {
+    if (profileId) {
+      const saved = await updateTeaProfile(profileId, mapTeaProfileToUpdate(newProfile));
+      setProfile(mapTeaProfileRow(saved));
+    } else {
+      const session = await getCurrentSession();
+      if (!session?.user) throw new Error('Sua sessão expirou. Entre novamente.');
+      const saved = await createTeaProfile(newProfile, session.user.id);
+      setProfileId(saved.id);
+      setProfile(mapTeaProfileRow(saved));
+    }
+    setView('responsavel-dashboard');
   };
 
   const handleLogout = async () => {
@@ -148,10 +189,7 @@ export default function App() {
         <ResponsibleOnboarding
           initialProfile={profile}
           onBack={() => setView('welcome')}
-          onComplete={(newProfile) => {
-            setProfile(newProfile);
-            setView('responsavel-dashboard');
-          }}
+          onComplete={handleProfileComplete}
         />
       )}
 
