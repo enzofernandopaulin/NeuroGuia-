@@ -35,6 +35,10 @@ export interface TeaProfile {
   stepByStep: boolean;
   helpButton: boolean;
   routineChangeWarning: boolean;
+  maxLaterTasks: number;
+  largeText: boolean;
+  reduceMotion: boolean;
+  audioInstructions: boolean;
 }
 
 export interface RoutineTask {

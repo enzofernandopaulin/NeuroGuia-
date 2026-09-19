@@ -32,6 +32,10 @@ const defaultProfile: TeaProfile = {
   stepByStep: true,
   helpButton: true,
   routineChangeWarning: true,
+  maxLaterTasks: 2,
+  largeText: false,
+  reduceMotion: false,
+  audioInstructions: false,
 };
 
 export default function App() {
@@ -232,6 +236,7 @@ export default function App() {
       {view === 'responsavel-onboarding' && (
         <ResponsibleOnboarding
           initialProfile={profile}
+          isEditing={Boolean(profileId)}
           onBack={() => setView('welcome')}
           onComplete={handleProfileComplete}
         />

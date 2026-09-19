@@ -18,6 +18,9 @@ export interface SupportPreset {
   stepByStep: boolean;
   helpButton: boolean;
   routineChangeWarning: boolean;
+  largeText: boolean;
+  reduceMotion: boolean;
+  audioInstructions: boolean;
 }
 
 const presets: Record<SupportLevel, SupportPreset> = {
@@ -32,6 +35,7 @@ const presets: Record<SupportLevel, SupportPreset> = {
     stepByStep: false,
     helpButton: true,
     routineChangeWarning: true,
+    largeText: false, reduceMotion: false, audioInstructions: false,
   },
   'nivel-2': {
     mode: 'guiado',
@@ -44,6 +48,7 @@ const presets: Record<SupportLevel, SupportPreset> = {
     stepByStep: true,
     helpButton: true,
     routineChangeWarning: true,
+    largeText: false, reduceMotion: true, audioInstructions: false,
   },
   'nivel-3': {
     mode: 'acompanhado',
@@ -56,6 +61,7 @@ const presets: Record<SupportLevel, SupportPreset> = {
     stepByStep: true,
     helpButton: true,
     routineChangeWarning: true,
+    largeText: true, reduceMotion: true, audioInstructions: true,
   },
   'nao-informado': {
     mode: 'guiado',
@@ -68,6 +74,7 @@ const presets: Record<SupportLevel, SupportPreset> = {
     stepByStep: true,
     helpButton: true,
     routineChangeWarning: true,
+    largeText: false, reduceMotion: false, audioInstructions: false,
   },
 };
 
@@ -87,5 +94,9 @@ export function applySupportPreset(profile: TeaProfile, level: SupportLevel): Te
     stepByStep: preset.stepByStep,
     helpButton: preset.helpButton,
     routineChangeWarning: preset.routineChangeWarning,
+    maxLaterTasks: preset.maxLaterTasks,
+    largeText: preset.largeText,
+    reduceMotion: preset.reduceMotion,
+    audioInstructions: preset.audioInstructions,
   };
 }

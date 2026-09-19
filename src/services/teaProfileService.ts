@@ -15,6 +15,10 @@ export function mapTeaProfileRow(row: TeaProfileRow): TeaProfile {
     stepByStep: row.step_by_step,
     helpButton: row.help_button,
     routineChangeWarning: row.routine_change_warning,
+    maxLaterTasks: row.max_later_tasks,
+    largeText: row.large_text,
+    reduceMotion: row.reduce_motion,
+    audioInstructions: row.audio_instructions,
   };
 }
 
@@ -36,6 +40,10 @@ export function mapTeaProfileToInsert(
     step_by_step: profile.stepByStep,
     help_button: profile.helpButton,
     routine_change_warning: profile.routineChangeWarning,
+    max_later_tasks: profile.maxLaterTasks,
+    large_text: profile.largeText,
+    reduce_motion: profile.reduceMotion,
+    audio_instructions: profile.audioInstructions,
   };
 }
 
@@ -52,6 +60,10 @@ export function mapTeaProfileToUpdate(profile: TeaProfile): TeaProfileUpdate {
     step_by_step: profile.stepByStep,
     help_button: profile.helpButton,
     routine_change_warning: profile.routineChangeWarning,
+    max_later_tasks: profile.maxLaterTasks,
+    large_text: profile.largeText,
+    reduce_motion: profile.reduceMotion,
+    audio_instructions: profile.audioInstructions,
   };
 }
 

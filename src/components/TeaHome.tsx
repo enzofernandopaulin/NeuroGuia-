@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { RoutineTask, TeaProfile, UserRole } from '../types';
-import { getSupportPreset } from '../lib/supportPresets';
 
 interface Props {
   profile: TeaProfile;
@@ -23,13 +22,22 @@ export const TeaHome: React.FC<Props> = ({
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [taskError, setTaskError] = useState('');
   const [saving, setSaving] = useState(false);
-  const supportPreset = getSupportPreset(profile.supportLevel);
 
   const soundSensitive = profile.sensoryTriggers.includes('sons');
   const visualSensitive = profile.softVisualMode;
-  const reduceMotion = profile.sensoryTriggers.includes('animacoes');
+  const reduceMotion = profile.reduceMotion || profile.sensoryTriggers.includes('animacoes');
   const imageMode = profile.communicationPreference === 'imagem' || profile.communicationPreference === 'texto-imagem';
-  const audioMode = profile.communicationPreference === 'audio' && !soundSensitive;
+  const audioMode = profile.audioInstructions && !soundSensitive;
+
+  const taskSymbol = (task: RoutineTask) => {
+    const name = `${task.title} ${task.category ?? ''}`.toLowerCase();
+    if (/dente|escov/.test(name)) return 'dentistry';
+    if (/mochila|escola/.test(name)) return 'backpack';
+    if (/ler|livro|estud|atividade/.test(name)) return 'menu_book';
+    if (/comida|lanche|almoç/.test(name)) return 'restaurant';
+    if (/banho|lavar/.test(name)) return 'water_drop';
+    return 'task_alt';
+  };
 
   const currentHelpTask = activeTask || nextTask;
 
@@ -87,15 +95,15 @@ export const TeaHome: React.FC<Props> = ({
   const visibleLater = useMemo(
     () => remaining
       .filter((task) => task.id !== activeTask?.id && task.id !== nextTask?.id)
-      .slice(0, supportPreset.maxLaterTasks),
-    [remaining, activeTask?.id, nextTask?.id, supportPreset.maxLaterTasks]
+      .slice(0, profile.maxLaterTasks),
+    [remaining, activeTask?.id, nextTask?.id, profile.maxLaterTasks]
   );
 
   const surface = visualSensitive ? 'bg-[#fafaf7] border-[#d8d8d0]' : 'bg-white border-outline-variant/60';
   const taskAccent = visualSensitive ? 'bg-[#ecece6] text-[#273029]' : 'bg-primary-fixed text-primary';
 
   return (
-    <main className={`min-h-screen px-5 py-7 max-w-3xl mx-auto ${reduceMotion ? '[&_*]:transition-none [&_*]:animate-none' : ''}`}>
+    <main className={`min-h-screen px-5 py-7 max-w-3xl mx-auto ${profile.largeText ? '[&_p]:!text-lg [&_button]:!text-lg' : ''} ${reduceMotion ? '[&_*]:transition-none [&_*]:animate-none' : ''}`}>
       <header className="flex items-center justify-between gap-3 mb-7">
         <div><p className="text-sm opacity-70">Olá,</p><h1 className="text-3xl font-extrabold">{profile.name}</h1></div>
         {role === 'responsavel' && (
@@ -121,7 +129,7 @@ export const TeaHome: React.FC<Props> = ({
       {profile.routineChangeWarning && (
         <div className={`rounded-2xl border p-4 mb-5 flex gap-3 items-start ${surface}`}>
           <span className="material-symbols-outlined">event_note</span>
-          <div><strong>Hoje está tudo como planejado.</strong><p className="text-sm opacity-70 mt-1">Se algo mudar, o NeuroGuia vai avisar aqui.</p></div>
+          <div><strong>Preferência de aviso ativada.</strong><p className="text-sm opacity-70 mt-1">Combine as mudanças de rotina com seu responsável.</p></div>
         </div>
       )}
 
@@ -136,7 +144,7 @@ export const TeaHome: React.FC<Props> = ({
           <p className="text-xs font-extrabold uppercase tracking-wider opacity-60">Agora</p>
           {imageMode && (
             <div className={`my-5 w-20 h-20 rounded-3xl flex items-center justify-center ${taskAccent}`}>
-              <span className="material-symbols-outlined text-4xl">task_alt</span>
+              <span className="material-symbols-outlined text-4xl">{taskSymbol(nextTask)}</span>
             </div>
           )}
           <h2 className="text-3xl font-extrabold">{nextTask.title}</h2>
@@ -149,6 +157,7 @@ export const TeaHome: React.FC<Props> = ({
         <section className={`rounded-3xl border p-6 shadow-sm mb-5 ${surface}`}>
           <p className="text-xs font-extrabold uppercase tracking-wider opacity-60">Fazendo agora</p>
           <h2 className="text-2xl font-extrabold mt-2">{activeTask.title}</h2>
+          {imageMode && <span aria-hidden="true" className="material-symbols-outlined text-5xl mt-4">{taskSymbol(activeTask)}</span>}
           {profile.stepByStep && activeTask.steps?.length ? (
             <div className="mt-6">
               <div className="text-sm font-bold opacity-60 mb-2">Etapa {stepIndex + 1} de {activeTask.steps.length}</div>
@@ -173,7 +182,7 @@ export const TeaHome: React.FC<Props> = ({
           <div className="space-y-2">
             {visibleLater.map((task) => (
               <button key={task.id} onClick={() => startTask(task)} className={`w-full rounded-2xl p-4 text-left ${visualSensitive ? 'bg-[#ecece6]' : 'bg-surface-container-low'}`}>
-                <div className="font-bold">{task.title}</div><div className="text-xs opacity-60 mt-1">{task.time}</div>
+                <div className="font-bold flex items-center gap-2">{imageMode && <span aria-hidden="true" className="material-symbols-outlined">{taskSymbol(task)}</span>}{task.title}</div><div className="text-xs opacity-60 mt-1">{task.time}</div>
               </button>
             ))}
           </div>

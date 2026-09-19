@@ -22,6 +22,10 @@ export interface TeaProfileRow {
   step_by_step: boolean;
   help_button: boolean;
   routine_change_warning: boolean;
+  max_later_tasks: number;
+  large_text: boolean;
+  reduce_motion: boolean;
+  audio_instructions: boolean;
   created_at: string;
   updated_at: string;
 }
