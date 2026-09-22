@@ -137,3 +137,4 @@ export const ScreenSwitcherModal: React.FC<ScreenSwitcherModalProps> = ({
     </div>
   );
 };
+

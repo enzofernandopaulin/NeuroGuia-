@@ -1,29 +1,38 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { RoutineTask, TeaProfile, UserRole } from '../types';
+import { RoutineChangeNotice, RoutineTask, SupportRequestKind, TeaProfile, UserRole } from '../types';
+import { getSupportPreset } from '../lib/supportPresets';
 
 interface Props {
   profile: TeaProfile;
   tasks: RoutineTask[];
   nextTask?: RoutineTask;
-  onToggleTask: (id: string) => void;
+  onToggleTask: (id: string) => Promise<boolean>;
   onBackToResponsible: () => void;
   role: UserRole;
+  routineChanges: RoutineChangeNotice[];
+  onSupportRequest: (kind: SupportRequestKind, task?: RoutineTask) => Promise<void>;
+  onAcknowledgeChange: (id: string) => Promise<void>;
+  onLeaveRoom: () => Promise<void> | void;
 }
 
 export const TeaHome: React.FC<Props> = ({
   profile, tasks, nextTask, onToggleTask, onBackToResponsible, role,
+  routineChanges, onSupportRequest, onAcknowledgeChange, onLeaveRoom,
 }) => {
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpMessage, setHelpMessage] = useState('');
   const [activeTask, setActiveTask] = useState<RoutineTask | undefined>(nextTask);
   const [stepIndex, setStepIndex] = useState(0);
   const [audioEnabled, setAudioEnabled] = useState(false);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const supportPreset = getSupportPreset(profile.supportLevel);
 
   const soundSensitive = profile.sensoryTriggers.includes('sons');
   const visualSensitive = profile.softVisualMode;
   const reduceMotion = profile.sensoryTriggers.includes('animacoes');
   const imageMode = profile.communicationPreference === 'imagem' || profile.communicationPreference === 'texto-imagem';
   const audioMode = profile.communicationPreference === 'audio' && !soundSensitive;
+  const isResponsiblePreview = role === 'responsavel';
 
   const currentHelpTask = activeTask || nextTask;
 
@@ -49,22 +58,52 @@ export const TeaHome: React.FC<Props> = ({
     speak(task.steps?.[0] || task.title);
   };
 
-  const completeActive = () => {
-    if (activeTask) onToggleTask(activeTask.id);
+  const completeActive = async () => {
+    if (!activeTask || pendingAction) return;
+    if (isResponsiblePreview) {
+      setActiveTask(undefined);
+      setStepIndex(0);
+      setHelpMessage('Demonstração concluída. O progresso do estudante não foi alterado.');
+      return;
+    }
+    setPendingAction('concluir');
+    const completed = await onToggleTask(activeTask.id);
+    setPendingAction(null);
+    if (!completed) {
+      setHelpMessage('Não foi possível concluir agora. Tente novamente.');
+      return;
+    }
     setActiveTask(undefined);
     setStepIndex(0);
     setHelpMessage('Tarefa concluída. Muito bem!');
   };
 
-  const requestHelp = () => {
-    setHelpOpen(false);
-    setHelpMessage('Pedido de ajuda registrado. Procure seu responsável ou mostre esta tela a ele.');
+  const registerSupport = async (kind: SupportRequestKind, message: string, closeModal = true) => {
+    if (pendingAction) return;
+    setPendingAction(kind);
+    try {
+      await onSupportRequest(kind, currentHelpTask);
+      if (closeModal) setHelpOpen(false);
+      setHelpMessage(message);
+    } catch {
+      setHelpMessage('Não foi possível enviar agora. Mostre esta tela ao responsável.');
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const openHelp = async () => {
+    setHelpMessage('');
+    setHelpOpen(true);
+    await registerSupport('me-perdi', 'O responsável foi avisado que você se perdeu.', false);
   };
 
   const remaining = tasks.filter((task) => !task.completed);
   const visibleLater = useMemo(
-    () => remaining.filter((task) => task.id !== activeTask?.id && task.id !== nextTask?.id),
-    [remaining, activeTask?.id, nextTask?.id]
+    () => remaining
+      .filter((task) => task.id !== activeTask?.id && task.id !== nextTask?.id)
+      .slice(0, supportPreset.maxLaterTasks),
+    [remaining, activeTask?.id, nextTask?.id, supportPreset.maxLaterTasks]
   );
 
   const surface = visualSensitive ? 'bg-[#fafaf7] border-[#d8d8d0]' : 'bg-white border-outline-variant/60';
@@ -74,10 +113,17 @@ export const TeaHome: React.FC<Props> = ({
     <main className={`min-h-screen px-5 py-7 max-w-3xl mx-auto ${reduceMotion ? '[&_*]:transition-none [&_*]:animate-none' : ''}`}>
       <header className="flex items-center justify-between gap-3 mb-7">
         <div><p className="text-sm opacity-70">Olá,</p><h1 className="text-3xl font-extrabold">{profile.name}</h1></div>
-        {role === 'responsavel' && (
+        {role === 'responsavel' ? (
           <button onClick={onBackToResponsible} className="rounded-2xl border-2 border-outline-variant px-4 py-2.5 font-bold text-sm">Área do responsável</button>
-        )}
+        ) : <button onClick={onLeaveRoom} className="rounded-2xl border-2 border-outline-variant px-4 py-2.5 font-bold text-sm">Sair da sala</button>}
       </header>
+
+      {isResponsiblePreview && (
+        <div className="rounded-2xl border-2 border-primary bg-primary-fixed p-4 mb-5">
+          <strong>Visualização do responsável</strong>
+          <p className="text-sm opacity-75 mt-1">Você está vendo como o NeuroGuia aparece para o estudante. Nenhuma ação ou progresso será salvo.</p>
+        </div>
+      )}
 
       {soundSensitive && (
         <div className={`rounded-2xl border p-4 mb-4 ${surface}`}>
@@ -93,7 +139,14 @@ export const TeaHome: React.FC<Props> = ({
         </button>
       )}
 
-      {profile.routineChangeWarning && (
+      {profile.routineChangeWarning && routineChanges.filter((item) => !item.acknowledged).map((notice) => (
+        <div key={notice.id} className={`rounded-2xl border p-4 mb-4 ${visualSensitive ? 'bg-[#f1eee4] border-[#c9c3ae]' : 'bg-primary-fixed border-primary-fixed-dim'}`}>
+          <div className="flex gap-3 items-start"><span className="material-symbols-outlined">notification_important</span><div className="flex-1"><strong>{notice.title}</strong><p className="text-sm opacity-75 mt-1">{notice.description}</p><p className="text-xs opacity-60 mt-2">{new Date(notice.effectiveAt).toLocaleString('pt-BR')}</p></div></div>
+          <button onClick={() => isResponsiblePreview ? setHelpMessage('Confirmação simulada. O aviso continua pendente para o estudante.') : onAcknowledgeChange(notice.id)} className="mt-3 rounded-xl bg-white/80 px-4 py-2 text-sm font-extrabold">{isResponsiblePreview ? 'Simular confirmação' : 'Entendi a mudança'}</button>
+        </div>
+      ))}
+
+      {profile.routineChangeWarning && !routineChanges.some((item) => !item.acknowledged) && (
         <div className={`rounded-2xl border p-4 mb-5 flex gap-3 items-start ${surface}`}>
           <span className="material-symbols-outlined">event_note</span>
           <div><strong>Hoje está tudo como planejado.</strong><p className="text-sm opacity-70 mt-1">Se algo mudar, o NeuroGuia vai avisar aqui.</p></div>
@@ -132,11 +185,11 @@ export const TeaHome: React.FC<Props> = ({
               {stepIndex < activeTask.steps.length - 1 ? (
                 <button onClick={() => { const next = stepIndex + 1; setStepIndex(next); speak(activeTask.steps![next]); }} className={`w-full mt-4 rounded-2xl py-4 font-extrabold ${visualSensitive ? 'bg-[#455348] text-white' : 'bg-primary text-white'}`}>Consegui, próxima etapa</button>
               ) : (
-                <button onClick={completeActive} className="w-full mt-4 rounded-2xl bg-tertiary text-white py-4 font-extrabold">Terminei ✓</button>
+                <button disabled={pendingAction === 'concluir'} onClick={completeActive} className="w-full mt-4 rounded-2xl bg-tertiary text-white py-4 font-extrabold disabled:opacity-60">{pendingAction === 'concluir' ? 'Salvando...' : 'Terminei ✓'}</button>
               )}
             </div>
           ) : (
-            <button onClick={completeActive} className="w-full mt-6 rounded-2xl bg-tertiary text-white py-4 font-extrabold">Concluir tarefa ✓</button>
+            <button disabled={pendingAction === 'concluir'} onClick={completeActive} className="w-full mt-6 rounded-2xl bg-tertiary text-white py-4 font-extrabold disabled:opacity-60">{pendingAction === 'concluir' ? 'Salvando...' : 'Concluir tarefa ✓'}</button>
           )}
         </section>
       )}
@@ -155,8 +208,8 @@ export const TeaHome: React.FC<Props> = ({
       )}
 
       {profile.helpButton && (
-        <button onClick={() => { setHelpMessage(''); setHelpOpen(true); }} className={`w-full rounded-3xl border-2 py-4 font-extrabold text-lg flex items-center justify-center gap-2 ${visualSensitive ? 'border-[#66756a] bg-[#ecece6] text-[#273029]' : 'border-secondary bg-secondary-fixed text-secondary'}`}>
-          <span className="material-symbols-outlined">help</span>Me perdi
+        <button disabled={isResponsiblePreview || pendingAction === 'me-perdi'} onClick={openHelp} title={isResponsiblePreview ? 'Disponível somente no acesso do estudante' : undefined} className={`w-full rounded-3xl border-2 py-4 font-extrabold text-lg flex items-center justify-center gap-2 disabled:opacity-50 ${visualSensitive ? 'border-[#66756a] bg-[#ecece6] text-[#273029]' : 'border-secondary bg-secondary-fixed text-secondary'}`}>
+          <span className="material-symbols-outlined">help</span>{isResponsiblePreview ? 'Me perdi — somente estudante' : pendingAction === 'me-perdi' ? 'Avisando...' : 'Me perdi'}
         </button>
       )}
 
@@ -168,10 +221,11 @@ export const TeaHome: React.FC<Props> = ({
             <div className={`rounded-2xl p-4 my-4 text-lg font-extrabold ${visualSensitive ? 'bg-[#ecece6]' : 'bg-surface-container-low'}`}>{currentHelpTask?.title || 'Sua próxima tarefa'}</div>
             <div className="grid gap-2">
               {currentHelpTask?.steps?.length ? (
-                <button onClick={() => startTask(currentHelpTask)} className={`rounded-2xl py-3.5 font-extrabold ${visualSensitive ? 'bg-[#455348] text-white' : 'bg-primary text-white'}`}>Mostrar passo a passo</button>
+                <button disabled={Boolean(pendingAction)} onClick={() => startTask(currentHelpTask)} className={`rounded-2xl py-3.5 font-extrabold disabled:opacity-60 ${visualSensitive ? 'bg-[#455348] text-white' : 'bg-primary text-white'}`}>Mostrar passo a passo</button>
               ) : null}
               <button onClick={() => { setHelpOpen(false); setHelpMessage('Tudo certo. Continue quando estiver pronto.'); }} className="rounded-2xl border-2 border-outline-variant py-3.5 font-extrabold">Entendi</button>
-              <button onClick={requestHelp} className="rounded-2xl border-2 border-secondary text-secondary py-3.5 font-extrabold">Pedir ajuda ao responsável</button>
+              <button disabled={Boolean(pendingAction)} onClick={() => registerSupport('nao-entendi', 'O responsável recebeu que você não entendeu.')} className="rounded-2xl border-2 border-primary text-primary py-3.5 font-extrabold disabled:opacity-60">{pendingAction === 'nao-entendi' ? 'Enviando...' : 'Não entendi'}</button>
+              <button disabled={Boolean(pendingAction)} onClick={() => registerSupport('ajuda', 'Pedido de ajuda enviado ao responsável.')} className="rounded-2xl border-2 border-secondary text-secondary py-3.5 font-extrabold disabled:opacity-60">{pendingAction === 'ajuda' ? 'Enviando...' : 'Pedir ajuda ao responsável'}</button>
             </div>
           </section>
         </div>

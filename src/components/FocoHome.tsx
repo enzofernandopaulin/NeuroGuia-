@@ -481,3 +481,4 @@ export const FocoHome: React.FC<FocoHomeProps> = ({
     </div>
   );
 };
+

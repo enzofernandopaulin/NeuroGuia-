@@ -1268,3 +1268,4 @@ export const StudentRoomView: React.FC<StudentRoomViewProps> = ({
     </div>
   );
 };
+

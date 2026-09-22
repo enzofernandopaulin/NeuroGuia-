@@ -167,3 +167,4 @@ export const JoinRoom: React.FC<JoinRoomProps> = ({ onJoinSuccess, setCurrentVie
     </div>
   );
 };
+

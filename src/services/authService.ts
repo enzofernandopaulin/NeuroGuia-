@@ -12,7 +12,6 @@ function appUrl(): string {
 export interface SignUpResult {
   user: User | null;
   session: Session | null;
-  needsEmailConfirmation: boolean;
 }
 
 export async function signUpResponsible(
@@ -29,7 +28,6 @@ export async function signUpResponsible(
         full_name: name.trim(),
         role: 'responsavel',
       },
-      emailRedirectTo: appUrl(),
     },
   });
 
@@ -38,7 +36,6 @@ export async function signUpResponsible(
   return {
     user: data.user,
     session: data.session,
-    needsEmailConfirmation: Boolean(data.user && !data.session),
   };
 }
 

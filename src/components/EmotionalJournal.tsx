@@ -362,3 +362,4 @@ export const EmotionalJournal: React.FC<EmotionalJournalProps> = ({ onEntryAdded
     </section>
   );
 };
+

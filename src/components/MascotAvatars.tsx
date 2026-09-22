@@ -568,3 +568,4 @@ export const MascotAvatar: React.FC<MascotAvatarProps> = ({
     </div>
   );
 };
+

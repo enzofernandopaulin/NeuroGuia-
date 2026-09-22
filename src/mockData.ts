@@ -183,3 +183,4 @@ export const initialMascotState: MascotState = {
     scarf: 1,
   },
 };
+

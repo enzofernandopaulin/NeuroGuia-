@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RoutineTask, TeaProfile } from '../types';
+import { RoutineChangeNotice, RoutineTask, SupportRequest, TeaProfile } from '../types';
 
 interface Props {
   responsibleName: string;
@@ -10,6 +10,13 @@ interface Props {
   onEditProfile: () => void;
   onOpenTeaView: () => void;
   onLogout: () => void;
+  accessCode: string | null;
+  supportRequests: SupportRequest[];
+  routineChanges: RoutineChangeNotice[];
+  onConfigureAccess: (pin: string) => Promise<void>;
+  onResolveRequest: (id: string) => Promise<void>;
+  onCreateRoutineChange: (title: string, description: string, effectiveAt: string) => Promise<void>;
+  onInviteTutor: (email: string) => Promise<void>;
 }
 
 export const ResponsibleDashboard: React.FC<Props> = ({
@@ -21,10 +28,23 @@ export const ResponsibleDashboard: React.FC<Props> = ({
   onEditProfile,
   onOpenTeaView,
   onLogout,
+  accessCode,
+  supportRequests,
+  routineChanges,
+  onConfigureAccess,
+  onResolveRequest,
+  onCreateRoutineChange,
+  onInviteTutor,
 }) => {
   const [title, setTitle] = useState('');
   const [time, setTime] = useState('');
   const [stepsText, setStepsText] = useState('');
+  const [pin, setPin] = useState('');
+  const [tutorEmail, setTutorEmail] = useState('');
+  const [changeTitle, setChangeTitle] = useState('');
+  const [changeDescription, setChangeDescription] = useState('');
+  const [changeAt, setChangeAt] = useState('');
+  const [feedback, setFeedback] = useState('');
 
   const completed = tasks.filter((task) => task.completed).length;
 
@@ -33,6 +53,27 @@ export const ResponsibleDashboard: React.FC<Props> = ({
     setTitle('');
     setTime('');
     setStepsText('');
+  };
+
+  const configureAccess = async () => {
+    setFeedback('');
+    try { await onConfigureAccess(pin); setPin(''); setFeedback('Código e PIN da sala atualizados.'); }
+    catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível configurar o acesso.'); }
+  };
+
+  const invite = async () => {
+    setFeedback('');
+    try { await onInviteTutor(tutorEmail); setTutorEmail(''); setFeedback('Tutor adicionado à rede de apoio.'); }
+    catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível adicionar o tutor.'); }
+  };
+
+  const announceChange = async () => {
+    setFeedback('');
+    try {
+      await onCreateRoutineChange(changeTitle, changeDescription, changeAt);
+      setChangeTitle(''); setChangeDescription(''); setChangeAt('');
+      setFeedback('Mudança registrada e visível na Sala do TEA.');
+    } catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível registrar a mudança.'); }
   };
 
   return (
@@ -81,8 +122,40 @@ export const ResponsibleDashboard: React.FC<Props> = ({
             </div>
             <button onClick={onEditProfile} className="w-full mt-4 rounded-2xl border-2 border-primary text-primary font-extrabold py-3">Editar adaptações</button>
           </section>
+          <section className="bg-white rounded-3xl border border-outline-variant/60 p-5">
+            <h2 className="font-extrabold text-lg">Acesso à Sala do TEA</h2>
+            {accessCode ? <div className="mt-3 rounded-2xl bg-secondary-fixed p-4 text-center"><span className="text-xs font-bold block">CÓDIGO</span><strong className="text-lg tracking-widest">{accessCode}</strong></div> : <p className="text-sm text-on-surface-variant mt-2">Crie um PIN para liberar o código da sala.</p>}
+            <input aria-label="Novo PIN da sala" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="PIN de 6 números" inputMode="numeric" className="w-full mt-3 rounded-2xl border-2 border-outline-variant p-3" />
+            <button onClick={configureAccess} disabled={pin.length !== 6} className="w-full mt-2 rounded-2xl bg-secondary text-white font-extrabold py-3 disabled:opacity-50">{accessCode ? 'Trocar PIN' : 'Criar acesso'}</button>
+          </section>
         </aside>
       </div>
+
+      {feedback && <div className="mt-5 rounded-2xl bg-primary-fixed text-on-primary-fixed p-4 font-bold">{feedback}</div>}
+
+      <div className="grid lg:grid-cols-2 gap-5 mt-5">
+        <section className="bg-white rounded-3xl border border-outline-variant/60 p-5">
+          <h2 className="text-xl font-extrabold">Pedidos de apoio</h2>
+          <div className="mt-4 space-y-3">{supportRequests.filter((item) => item.status !== 'resolvido').length ? supportRequests.filter((item) => item.status !== 'resolvido').map((item) => (
+            <div key={item.id} className="rounded-2xl bg-secondary-fixed p-4"><strong>{item.kind.replace('-', ' ')}</strong><p className="text-sm mt-1">{item.message}</p><button onClick={() => onResolveRequest(item.id)} className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-bold">Marcar como resolvido</button></div>
+          )) : <p className="text-sm text-on-surface-variant">Nenhum pedido pendente.</p>}</div>
+        </section>
+        <section className="bg-white rounded-3xl border border-outline-variant/60 p-5">
+          <h2 className="text-xl font-extrabold">Rede de apoio</h2>
+          <p className="text-sm text-on-surface-variant mt-1">Autorize um tutor ou profissional pelo e-mail da conta dele.</p>
+          <input value={tutorEmail} onChange={(e) => setTutorEmail(e.target.value)} type="email" placeholder="email@exemplo.com" className="w-full mt-4 rounded-2xl border-2 border-outline-variant p-4" />
+          <button onClick={invite} className="mt-2 rounded-2xl bg-tertiary text-white font-extrabold px-5 py-3">Adicionar tutor</button>
+        </section>
+      </div>
+
+      <section className="mt-5 bg-white rounded-3xl border border-outline-variant/60 p-5">
+        <h2 className="text-xl font-extrabold">Avisar mudança na rotina</h2>
+        <p className="text-sm text-on-surface-variant mt-1">O aviso antecipado aumenta a previsibilidade e aparecerá na sala.</p>
+        <div className="grid md:grid-cols-2 gap-3 mt-4"><input value={changeTitle} onChange={(e) => setChangeTitle(e.target.value)} placeholder="Ex.: Consulta mudou de horário" className="rounded-2xl border-2 border-outline-variant p-4" /><input value={changeAt} onChange={(e) => setChangeAt(e.target.value)} type="datetime-local" className="rounded-2xl border-2 border-outline-variant p-4" /></div>
+        <textarea value={changeDescription} onChange={(e) => setChangeDescription(e.target.value)} placeholder="Explique o que mudou e o que acontecerá agora" className="w-full min-h-24 rounded-2xl border-2 border-outline-variant p-4 mt-3" />
+        <button onClick={announceChange} disabled={!changeTitle.trim() || !changeAt} className="mt-3 rounded-2xl bg-primary text-white font-extrabold px-6 py-3.5 disabled:opacity-50">Publicar aviso</button>
+        {routineChanges.length > 0 && <p className="text-xs text-on-surface-variant mt-3">{routineChanges.length} aviso(s) registrado(s).</p>}
+      </section>
 
       <section className="mt-5 bg-white rounded-3xl border border-outline-variant/60 p-5">
         <h2 className="text-xl font-extrabold">Criar nova tarefa</h2>

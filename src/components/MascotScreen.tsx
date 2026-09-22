@@ -1594,3 +1594,4 @@ export const MascotScreen: React.FC<MascotScreenProps> = ({
     </div>
   );
 };
+

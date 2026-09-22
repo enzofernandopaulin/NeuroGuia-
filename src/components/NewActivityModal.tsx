@@ -233,3 +233,4 @@ export const NewActivityModal: React.FC<NewActivityModalProps> = ({
     </div>
   );
 };
+

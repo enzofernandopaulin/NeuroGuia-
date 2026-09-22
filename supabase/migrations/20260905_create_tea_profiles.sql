@@ -85,3 +85,4 @@ create trigger set_tea_profiles_updated_at
 before update on public.tea_profiles
 for each row
 execute function public.set_updated_at();
+

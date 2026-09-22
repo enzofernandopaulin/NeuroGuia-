@@ -25,6 +25,23 @@ export function mapTeaProfileToInsert(
   return {
     responsible_id: responsibleId,
     name: profile.name.trim(),
+    avatar_url: null,
+    age_group: profile.ageGroup,
+    support_level: profile.supportLevel,
+    communication_preference: profile.communicationPreference,
+    autonomy: profile.autonomy,
+    sensory_triggers: profile.sensoryTriggers,
+    routine_change_difficulty: profile.routineChangeDifficulty,
+    soft_visual_mode: profile.softVisualMode,
+    step_by_step: profile.stepByStep,
+    help_button: profile.helpButton,
+    routine_change_warning: profile.routineChangeWarning,
+  };
+}
+
+export function mapTeaProfileToUpdate(profile: TeaProfile): TeaProfileUpdate {
+  return {
+    name: profile.name.trim(),
     age_group: profile.ageGroup,
     support_level: profile.supportLevel,
     communication_preference: profile.communicationPreference,

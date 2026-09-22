@@ -95,3 +95,4 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentView, setCurrentVie
     </nav>
   );
 };
+

@@ -55,3 +55,4 @@ export const ResetPassword: React.FC<Props> = ({ onDone }) => {
     </main>
   );
 };
+

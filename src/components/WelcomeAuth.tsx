@@ -8,16 +8,18 @@ import {
 } from '../services/authService';
 
 interface Props {
-  onResponsibleAuthenticated: (name: string, isNewAccount: boolean) => void;
+  onResponsibleAuthenticated: (name: string, isNewAccount: boolean) => Promise<void> | void;
   onTeaAccess: () => void;
+  onTutorAuthenticated: (name: string) => Promise<void> | void;
 }
 
 export const WelcomeAuth: React.FC<Props> = ({
   onResponsibleAuthenticated,
   onTeaAccess,
+  onTutorAuthenticated,
 }) => {
   const [role, setRole] = useState<UserRole>('responsavel');
-  const [tab, setTab] = useState<'entrar' | 'cadastrar'>('cadastrar');
+  const [tab, setTab] = useState<'entrar' | 'cadastrar'>('entrar');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -66,23 +68,18 @@ export const WelcomeAuth: React.FC<Props> = ({
     try {
       if (tab === 'cadastrar') {
         const result = await signUpResponsible(name, email, password);
-        if (result.needsEmailConfirmation) {
-          setFeedback({
-            type: 'success',
-            text: 'Conta criada. Confira seu e-mail para confirmar o cadastro antes de entrar.',
-          });
-          setTab('entrar');
-          setPassword('');
-        } else {
-          onResponsibleAuthenticated(name, true);
+        if (!result.session) {
+          throw new Error('A conta foi criada, mas a sessão não foi iniciada. Verifique a configuração de confirmação de e-mail no Supabase.');
         }
+        await onResponsibleAuthenticated(name, true);
       } else {
         const data = await signInResponsible(email, password);
         const displayName =
           String(data.user?.user_metadata?.full_name || '').trim() ||
           data.user?.email?.split('@')[0] ||
           'Responsável';
-        onResponsibleAuthenticated(displayName, false);
+        if (role === 'tutor') await onTutorAuthenticated(displayName);
+        else await onResponsibleAuthenticated(displayName, false);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Não foi possível concluir a autenticação.';
@@ -129,16 +126,26 @@ export const WelcomeAuth: React.FC<Props> = ({
           <p className="mt-2 text-sm text-on-surface-variant">
             Rotina, autonomia e apoio de um jeito mais previsível.
           </p>
+          <p className="mt-3 text-xs font-bold text-primary">
+            Experiências personalizadas para os níveis de suporte 1, 2 e 3.
+          </p>
         </div>
 
         <section className="bg-white rounded-3xl border border-outline-variant/60 shadow-sm p-5">
           <div className="grid grid-cols-2 gap-2 bg-surface-container-low rounded-2xl p-1.5 mb-5">
             <button type="button" onClick={() => { setTab('entrar'); setFeedback(null); }} className={`py-3 rounded-xl font-bold text-sm ${tab === 'entrar' ? 'bg-white shadow-sm' : 'text-on-surface-variant'}`}>Entrar</button>
-            <button type="button" onClick={() => { setTab('cadastrar'); setFeedback(null); }} className={`py-3 rounded-xl font-bold text-sm ${tab === 'cadastrar' ? 'bg-white shadow-sm' : 'text-on-surface-variant'}`}>Criar conta</button>
+            <button type="button" onClick={() => { setTab('cadastrar'); setRole('responsavel'); setFeedback(null); }} className={`py-3 rounded-xl font-bold text-sm ${tab === 'cadastrar' ? 'bg-white shadow-sm' : 'text-on-surface-variant'}`}>Cadastrar estudante com TEA</button>
           </div>
 
-          <p className="text-xs font-bold uppercase tracking-wider text-outline mb-2">Quem está acessando?</p>
-          <div className="grid grid-cols-2 gap-3 mb-5">
+          {tab === 'cadastrar' && (
+            <div className="rounded-2xl bg-primary-fixed/60 p-4 mb-5 text-sm text-on-primary-fixed">
+              <strong>Primeiro, crie a conta do responsável.</strong>
+              <p className="mt-1 text-xs">Depois você cadastrará o estudante e definirá as adaptações necessárias.</p>
+            </div>
+          )}
+
+          {tab === 'entrar' && <p className="text-xs font-bold uppercase tracking-wider text-outline mb-2">Quem está acessando?</p>}
+          {tab === 'entrar' && <div className="grid sm:grid-cols-3 gap-3 mb-5">
             <button type="button" onClick={() => { setRole('responsavel'); setFeedback(null); }} className={`rounded-2xl border-2 p-4 text-left transition-all ${role === 'responsavel' ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-surface-container-low'}`}>
               <span className="material-symbols-outlined text-3xl">family_restroom</span>
               <div className="font-extrabold mt-2">Responsável</div>
@@ -147,17 +154,22 @@ export const WelcomeAuth: React.FC<Props> = ({
 
             <button type="button" onClick={() => { setRole('tea'); setFeedback(null); }} className={`rounded-2xl border-2 p-4 text-left transition-all ${role === 'tea' ? 'border-secondary bg-secondary-fixed' : 'border-outline-variant bg-surface-container-low'}`}>
               <span className="material-symbols-outlined text-3xl">sentiment_satisfied</span>
-              <div className="font-extrabold mt-2">TEA</div>
-              <div className="text-xs text-on-surface-variant mt-1">Vínculo seguro será feito no tópico 3.</div>
+              <div className="font-extrabold mt-2">Estudante</div>
+              <div className="text-xs text-on-surface-variant mt-1">Acesso ao perfil criado pelo responsável.</div>
             </button>
-          </div>
+            <button type="button" onClick={() => { setRole('tutor'); setFeedback(null); }} className={`rounded-2xl border-2 p-4 text-left transition-all ${role === 'tutor' ? 'border-tertiary bg-tertiary-fixed' : 'border-outline-variant bg-surface-container-low'}`}>
+              <span className="material-symbols-outlined text-3xl">school</span>
+              <div className="font-extrabold mt-2">Tutor</div>
+              <div className="text-xs text-on-surface-variant mt-1">Acesso autorizado pelo responsável.</div>
+            </button>
+          </div>}
 
           <form onSubmit={submit} className="space-y-3">
             {role === 'responsavel' && tab === 'cadastrar' && (
               <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" placeholder="Nome do responsável" className="w-full rounded-2xl border-2 border-outline-variant bg-surface-container-low px-4 py-3.5 outline-none focus:border-primary" />
             )}
 
-            {role === 'responsavel' && (
+            {(role === 'responsavel' || role === 'tutor') && (
               <>
                 <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" placeholder="E-mail" className="w-full rounded-2xl border-2 border-outline-variant bg-surface-container-low px-4 py-3.5 outline-none focus:border-primary" />
                 <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete={tab === 'entrar' ? 'current-password' : 'new-password'} placeholder="Senha" className="w-full rounded-2xl border-2 border-outline-variant bg-surface-container-low px-4 py-3.5 outline-none focus:border-primary" />
@@ -190,7 +202,7 @@ export const WelcomeAuth: React.FC<Props> = ({
             )}
 
             <button disabled={loading} className="w-full rounded-2xl bg-primary text-white font-extrabold py-4 shadow-sm disabled:opacity-60">
-              {loading ? 'Aguarde...' : role === 'responsavel' ? (tab === 'cadastrar' ? 'Criar conta' : 'Entrar') : 'Entrar no meu NeuroGuia'}
+              {loading ? 'Aguarde...' : role === 'responsavel' ? (tab === 'cadastrar' ? 'Continuar para cadastrar estudante' : 'Entrar como responsável') : role === 'tutor' ? 'Entrar como tutor' : 'Acessar meu NeuroGuia'}
             </button>
           </form>
         </section>
