@@ -26,6 +26,9 @@ export const TeaHome: React.FC<Props> = ({
   const [stepIndex, setStepIndex] = useState(0);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerEnded, setTimerEnded] = useState(false);
   const supportPreset = getSupportPreset(profile.supportLevel);
 
   const soundSensitive = profile.sensoryTriggers.includes('sons');
@@ -42,6 +45,27 @@ export const TeaHome: React.FC<Props> = ({
     if (soundSensitive) setAudioEnabled(false);
   }, [audioMode, soundSensitive]);
 
+  useEffect(() => {
+    if (!timerRunning || remainingSeconds <= 0) return;
+    const interval = window.setInterval(() => {
+      setRemainingSeconds((current) => {
+        if (current <= 1) {
+          setTimerRunning(false);
+          setTimerEnded(true);
+          return 0;
+        }
+        return current - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [timerRunning, remainingSeconds]);
+
+  const formatTime = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
+  };
+
   const speak = (text: string) => {
     if (!audioEnabled || soundSensitive || !('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
@@ -56,6 +80,9 @@ export const TeaHome: React.FC<Props> = ({
     setStepIndex(0);
     setHelpOpen(false);
     setHelpMessage('');
+    setRemainingSeconds((task.durationMinutes || 0) * 60);
+    setTimerRunning(Boolean(task.durationMinutes));
+    setTimerEnded(false);
     speak(task.steps?.[0] || task.title);
   };
 
@@ -64,6 +91,7 @@ export const TeaHome: React.FC<Props> = ({
     if (isResponsiblePreview) {
       setActiveTask(undefined);
       setStepIndex(0);
+      setTimerRunning(false);
       setHelpMessage('Demonstração concluída. O progresso do estudante não foi alterado.');
       return;
     }
@@ -76,6 +104,7 @@ export const TeaHome: React.FC<Props> = ({
     }
     setActiveTask(undefined);
     setStepIndex(0);
+    setTimerRunning(false);
     setHelpMessage('Tarefa concluída. Muito bem!');
   };
 
@@ -171,7 +200,7 @@ export const TeaHome: React.FC<Props> = ({
             </div>
           )}
           <h2 className="text-3xl font-extrabold">{nextTask.title}</h2>
-          <p className="mt-2 text-sm opacity-70">{nextTask.time}</p>
+          <p className="mt-2 text-sm opacity-70">{nextTask.time}{nextTask.durationMinutes ? ` • Tempo combinado: ${nextTask.durationMinutes} min` : ''}</p>
           <button onClick={() => startTask(nextTask)} className={`w-full mt-6 rounded-2xl py-4 text-lg font-extrabold ${visualSensitive ? 'bg-[#455348] text-white' : 'bg-primary text-white'}`}>Começar</button>
         </section>
       )}
@@ -180,6 +209,20 @@ export const TeaHome: React.FC<Props> = ({
         <section className={`rounded-3xl border p-6 shadow-sm mb-5 ${surface}`}>
           <p className="text-xs font-extrabold uppercase tracking-wider opacity-60">Fazendo agora</p>
           <h2 className="text-2xl font-extrabold mt-2">{activeTask.title}</h2>
+          {activeTask.durationMinutes ? (
+            <div className={`mt-5 rounded-2xl border p-4 text-center ${visualSensitive ? 'bg-[#ecece6] border-[#c9c9c0]' : 'bg-primary-fixed border-primary-fixed-dim'}`}>
+              <p className="text-sm font-bold opacity-70">Tempo combinado</p>
+              <div className="text-4xl font-extrabold tabular-nums mt-1" aria-label={`${Math.ceil(remainingSeconds / 60)} minutos restantes`}>{formatTime(remainingSeconds)}</div>
+              {timerEnded ? (
+                <p aria-live="polite" className="mt-2 font-bold">O tempo terminou. Tudo bem: você pode continuar ou pedir ajuda.</p>
+              ) : (
+                <div className="flex gap-2 mt-3 justify-center">
+                  <button onClick={() => setTimerRunning((running) => !running)} className="rounded-xl border-2 border-outline-variant bg-white px-4 py-2 font-bold">{timerRunning ? 'Pausar' : 'Continuar'}</button>
+                  <button onClick={() => { setRemainingSeconds(activeTask.durationMinutes! * 60); setTimerRunning(true); setTimerEnded(false); }} className="rounded-xl border-2 border-outline-variant bg-white px-4 py-2 font-bold">Recomeçar tempo</button>
+                </div>
+              )}
+            </div>
+          ) : null}
           {profile.stepByStep && activeTask.steps?.length ? (
             <div className="mt-6">
               <div className="text-sm font-bold opacity-60 mb-2">Etapa {stepIndex + 1} de {activeTask.steps.length}</div>

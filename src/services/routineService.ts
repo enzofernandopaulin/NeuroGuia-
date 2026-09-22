@@ -7,6 +7,7 @@ type TaskRow = {
   category: string | null; steps: string[] | null; completed: boolean;
   scheduled_date: string; updated_at: string;
   sort_order?: number; recurrence_days?: number[]; archived?: boolean;
+  duration_minutes?: number | null;
 };
 
 const mapTask = (row: TaskRow): RoutineTask => ({
@@ -15,6 +16,7 @@ const mapTask = (row: TaskRow): RoutineTask => ({
   steps: row.steps || [], completed: row.completed, scheduledDate: row.scheduled_date,
   updatedAt: row.updated_at,
   sortOrder: row.sort_order || 0, recurrenceDays: row.recurrence_days || [], archived: Boolean(row.archived),
+  durationMinutes: row.duration_minutes ?? null,
 });
 
 async function listTasksWith(client: SupabaseClient, profileId: string): Promise<RoutineTask[]> {
@@ -27,18 +29,27 @@ async function listTasksWith(client: SupabaseClient, profileId: string): Promise
 export const listResponsibleTasks = (profileId: string) => listTasksWith(requireSupabase(), profileId);
 export const listStudentTasks = (profileId: string) => listTasksWith(requireStudentSupabase(), profileId);
 
-export async function createRoutineTask(profileId: string, title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = []) {
+export async function createRoutineTask(profileId: string, title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = [], durationMinutes?: number | null) {
   const client = requireSupabase();
   const { data, error } = await client.from('routine_tasks').insert({
     profile_id: profileId, title: title.trim(), task_time: time || null,
     steps: steps.filter(Boolean), category: 'Rotina', scheduled_date: scheduledDate || new Date().toISOString().slice(0, 10), recurrence_days: recurrenceDays,
+    duration_minutes: durationMinutes || null,
   }).select('*').single();
   if (error) throw error;
   return mapTask(data as TaskRow);
 }
 
-export async function updateRoutineTask(taskId: string, changes: {title?: string; task_time?: string | null; steps?: string[]; scheduled_date?: string; recurrence_days?: number[]; sort_order?: number}) {
+export async function updateRoutineTask(taskId: string, changes: {title?: string; task_time?: string | null; steps?: string[]; scheduled_date?: string; recurrence_days?: number[]; sort_order?: number; duration_minutes?: number | null}) {
   const { error } = await requireSupabase().from('routine_tasks').update(changes).eq('id', taskId);
+  if (error) throw error;
+}
+
+export async function setTutorTaskDuration(taskId: string, durationMinutes: number | null) {
+  const { error } = await requireSupabase().rpc('set_tutor_task_duration', {
+    p_task_id: taskId,
+    p_duration_minutes: durationMinutes,
+  });
   if (error) throw error;
 }
 

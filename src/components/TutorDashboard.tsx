@@ -8,10 +8,13 @@ interface Props {
   requests: SupportRequest[];
   onLogout: () => void;
   onSelectAssignment: (assignment: TutorAssignment) => Promise<void>;
+  onSetTaskDuration: (taskId: string, durationMinutes: number | null) => Promise<void>;
 }
 
-export const TutorDashboard: React.FC<Props> = ({ name, assignments, tasks, requests, onLogout, onSelectAssignment }) => {
+export const TutorDashboard: React.FC<Props> = ({ name, assignments, tasks, requests, onLogout, onSelectAssignment, onSetTaskDuration }) => {
   const [activeId, setActiveId] = useState(assignments[0]?.id || '');
+  const [durationDrafts, setDurationDrafts] = useState<Record<string, string>>({});
+  const [feedback, setFeedback] = useState('');
   const assignment = assignments.find((item) => item.id === activeId) || assignments[0];
   return (
     <main className="min-h-screen max-w-5xl mx-auto px-5 py-7">
@@ -27,7 +30,8 @@ export const TutorDashboard: React.FC<Props> = ({ name, assignments, tasks, requ
             <p className="text-xs uppercase tracking-wider font-extrabold text-outline">Acompanhamento</p>
             <h2 className="text-2xl font-extrabold mt-2">{assignment.profile.name}</h2>
             <p className="text-sm text-on-surface-variant mt-2">Visualização de apoio. Alterações de perfil continuam sob controle do responsável.</p>
-            <div className="mt-5 space-y-2">{tasks.map((task) => <div key={task.id} className="rounded-2xl bg-surface-container-low p-4"><strong>{task.completed ? '✓ ' : ''}{task.title}</strong><p className="text-xs mt-1 opacity-70">{task.time}</p></div>)}</div>
+            <div className="mt-5 space-y-2">{tasks.map((task) => <div key={task.id} className="rounded-2xl bg-surface-container-low p-4"><strong>{task.completed ? '✓ ' : ''}{task.title}</strong><p className="text-xs mt-1 opacity-70">{task.time}{task.durationMinutes ? ` • ${task.durationMinutes} minutos` : ' • sem tempo definido'}</p><div className="flex gap-2 mt-3"><input aria-label={`Tempo de ${task.title} em minutos`} value={durationDrafts[task.id] ?? String(task.durationMinutes ?? '')} onChange={(e)=>setDurationDrafts((current)=>({...current,[task.id]:e.target.value}))} type="number" min="1" max="480" placeholder="Minutos (opcional)" className="min-w-0 flex-1 rounded-xl border bg-white px-3 py-2"/><button onClick={async()=>{const raw=durationDrafts[task.id] ?? String(task.durationMinutes ?? '');await onSetTaskDuration(task.id,raw ? Number(raw) : null);setFeedback(raw ? `Tempo de ${raw} minutos salvo.` : 'Tempo removido.');}} className="rounded-xl bg-primary text-white px-3 py-2 font-bold">Salvar</button></div></div>)}</div>
+            {feedback && <p className="mt-3 rounded-xl bg-primary-fixed p-3 text-sm font-bold">{feedback}</p>}
           </section>
           <section className="rounded-3xl bg-white border border-outline-variant/60 p-6">
             <h2 className="text-xl font-extrabold">Sinais de apoio</h2>

@@ -51,6 +51,7 @@ export interface RoutineTask {
   sortOrder?: number;
   recurrenceDays?: number[];
   archived?: boolean;
+  durationMinutes?: number | null;
 }
 
 export type SupportRequestKind = 'ajuda' | 'nao-entendi' | 'me-perdi';

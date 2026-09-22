@@ -10,8 +10,8 @@ interface Props {
   profile: TeaProfile;
   tasks: RoutineTask[];
   onToggleTask: (id: string) => void;
-  onAddTask: (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays?: number[]) => void;
-  onUpdateTask: (id: string, changes: {title?: string; task_time?: string | null; steps?: string[]}) => Promise<void>;
+  onAddTask: (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays?: number[], durationMinutes?: number | null) => void;
+  onUpdateTask: (id: string, changes: {title?: string; task_time?: string | null; steps?: string[]; duration_minutes?: number | null}) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
   onEditProfile: () => void;
   onOpenTeaView: () => void;
@@ -54,6 +54,7 @@ export const ResponsibleDashboard: React.FC<Props> = ({
   const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().slice(0,10));
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0,10));
   const [recurrenceDays, setRecurrenceDays] = useState<number[]>([]);
+  const [durationMinutes, setDurationMinutes] = useState('');
   const [pin, setPin] = useState('');
   const [tutorEmail, setTutorEmail] = useState('');
   const [changeTitle, setChangeTitle] = useState('');
@@ -67,10 +68,11 @@ export const ResponsibleDashboard: React.FC<Props> = ({
   const completed = visibleTasks.filter((task) => task.completed).length;
 
   const add = () => {
-    onAddTask(title, time, stepsText.split('\n').map((item) => item.trim()), scheduledDate, recurrenceDays);
+    onAddTask(title, time, stepsText.split('\n').map((item) => item.trim()), scheduledDate, recurrenceDays, durationMinutes ? Number(durationMinutes) : null);
     setTitle('');
     setTime('');
     setStepsText('');
+    setDurationMinutes('');
   };
 
   const configureAccess = async () => {
@@ -131,7 +133,7 @@ export const ResponsibleDashboard: React.FC<Props> = ({
                 <button aria-label={task.completed ? 'Reabrir tarefa' : 'Concluir tarefa'} onClick={() => onToggleTask(task.id)} className={`w-7 h-7 shrink-0 rounded-full border-2 flex items-center justify-center ${task.completed ? 'bg-tertiary border-tertiary text-white' : 'border-outline'}`}>{task.completed ? '✓' : ''}</button>
                 <div className="flex-1">
                   <div className={`font-bold ${task.completed ? 'line-through opacity-60' : ''}`}>{task.title}</div>
-                  <div className="text-xs text-on-surface-variant mt-1">{task.time} • {task.category}</div>
+                  <div className="text-xs text-on-surface-variant mt-1">{task.time} • {task.category}{task.durationMinutes ? ` • ${task.durationMinutes} min` : ''}</div>
                 </div>
                 <button onClick={async() => { const nextTitle = window.prompt('Novo nome da tarefa:', task.title); if (nextTitle?.trim()) await onUpdateTask(task.id,{title:nextTitle.trim()}); }} className="rounded-xl border px-3 py-2 text-sm font-bold">Editar</button>
                 <button onClick={() => setConfirmDeleteTask(task.id)} className="rounded-xl border border-error text-error px-3 py-2 text-sm font-bold">Excluir</button>
@@ -198,6 +200,9 @@ export const ResponsibleDashboard: React.FC<Props> = ({
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Nome da tarefa" className="rounded-2xl border-2 border-outline-variant p-4" />
           <input value={time} onChange={(e) => setTime(e.target.value)} type="time" className="rounded-2xl border-2 border-outline-variant p-4" />
           <input aria-label="Data da tarefa" value={scheduledDate} onChange={(e)=>setScheduledDate(e.target.value)} type="date" className="rounded-2xl border-2 border-outline-variant p-4" />
+          <label className="rounded-2xl border-2 border-outline-variant p-3 text-sm font-bold">Tempo de realização (opcional)
+            <input aria-label="Tempo de realização em minutos" value={durationMinutes} onChange={(e)=>setDurationMinutes(e.target.value)} type="number" min="1" max="480" placeholder="Ex.: 15 minutos" className="w-full mt-1 bg-transparent outline-none font-normal" />
+          </label>
         </div>
         <fieldset className="mt-3"><legend className="text-sm font-bold">Repetir semanalmente (opcional)</legend><div className="flex flex-wrap gap-2 mt-2">{['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((day,index)=><label key={day} className="rounded-xl border px-3 py-2 text-sm"><input type="checkbox" checked={recurrenceDays.includes(index)} onChange={()=>setRecurrenceDays((days)=>days.includes(index)?days.filter((item)=>item!==index):[...days,index])} /> {day}</label>)}</div></fieldset>
         <textarea value={stepsText} onChange={(e) => setStepsText(e.target.value)} placeholder={'Etapas, uma por linha\nEx.: Pegue a escova\nColoque a pasta'} className="w-full min-h-28 rounded-2xl border-2 border-outline-variant p-4 mt-3" />
