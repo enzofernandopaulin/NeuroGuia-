@@ -48,6 +48,9 @@ export interface RoutineTask {
   steps?: string[];
   scheduledDate?: string;
   updatedAt?: string;
+  sortOrder?: number;
+  recurrenceDays?: number[];
+  archived?: boolean;
 }
 
 export type SupportRequestKind = 'ajuda' | 'nao-entendi' | 'me-perdi';
@@ -82,4 +85,14 @@ export interface TutorAssignment {
   profileId: string;
   tutorEmail: string;
   profile: TeaProfile;
+  canRespond?: boolean;
+}
+
+export interface ProfileOption { id: string; profile: TeaProfile; }
+export interface GameProgress {
+  profileId: string;
+  stars: number;
+  mascot: string;
+  equippedItem?: string | null;
+  inventory: string[];
 }

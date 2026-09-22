@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { RoutineChangeNotice, RoutineTask, SupportRequestKind, TeaProfile, UserRole } from '../types';
+import { GameProgress, RoutineChangeNotice, RoutineTask, SupportRequestKind, TeaProfile, UserRole } from '../types';
 import { getSupportPreset } from '../lib/supportPresets';
 
 interface Props {
@@ -13,11 +13,12 @@ interface Props {
   onSupportRequest: (kind: SupportRequestKind, task?: RoutineTask) => Promise<void>;
   onAcknowledgeChange: (id: string) => Promise<void>;
   onLeaveRoom: () => Promise<void> | void;
+  gameProgress: GameProgress | null;
 }
 
 export const TeaHome: React.FC<Props> = ({
   profile, tasks, nextTask, onToggleTask, onBackToResponsible, role,
-  routineChanges, onSupportRequest, onAcknowledgeChange, onLeaveRoom,
+  routineChanges, onSupportRequest, onAcknowledgeChange, onLeaveRoom, gameProgress,
 }) => {
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpMessage, setHelpMessage] = useState('');
@@ -115,7 +116,7 @@ export const TeaHome: React.FC<Props> = ({
         <div><p className="text-sm opacity-70">Olá,</p><h1 className="text-3xl font-extrabold">{profile.name}</h1></div>
         {role === 'responsavel' ? (
           <button onClick={onBackToResponsible} className="rounded-2xl border-2 border-outline-variant px-4 py-2.5 font-bold text-sm">Área do responsável</button>
-        ) : <button onClick={onLeaveRoom} className="rounded-2xl border-2 border-outline-variant px-4 py-2.5 font-bold text-sm">Sair da sala</button>}
+        ) : <button onClick={onLeaveRoom} className="rounded-2xl border-2 border-outline-variant px-4 py-2.5 font-bold text-sm">Sair do perfil</button>}
       </header>
 
       {isResponsiblePreview && (
@@ -124,6 +125,8 @@ export const TeaHome: React.FC<Props> = ({
           <p className="text-sm opacity-75 mt-1">Você está vendo como o NeuroGuia aparece para o estudante. Nenhuma ação ou progresso será salvo.</p>
         </div>
       )}
+
+      <div className={`rounded-2xl border p-4 mb-4 flex items-center justify-between ${surface}`}><div><strong>Seu companheiro: {gameProgress?.mascot || 'coruja'}</strong><p className="text-sm opacity-70">Cada conquista fortalece sua autonomia.</p></div><div className="text-xl font-extrabold">⭐ {gameProgress?.stars || 0}</div></div>
 
       {soundSensitive && (
         <div className={`rounded-2xl border p-4 mb-4 ${surface}`}>

@@ -184,7 +184,7 @@ export const WelcomeAuth: React.FC<Props> = ({
 
             {role === 'tea' && (
               <div className="rounded-2xl bg-secondary-fixed/60 p-4 text-sm">
-                O acesso TEA ainda é temporário nesta etapa. O código de vínculo com o responsável será implementado no tópico 3.
+                Entre com o código individual e o PIN de segurança criados pelo responsável.
               </div>
             )}
 

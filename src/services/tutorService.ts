@@ -12,12 +12,17 @@ export async function inviteTutor(profileId: string, email: string): Promise<voi
   if (error) throw error;
 }
 
+export async function removeTutor(id: string): Promise<void> {
+  const { error } = await requireSupabase().from('tutor_links').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function listTutorAssignments(): Promise<TutorAssignment[]> {
   const { data, error } = await requireSupabase().from('tutor_links')
-    .select('id, profile_id, tutor_email, tea_profiles(*)');
+    .select('id, profile_id, tutor_email, can_respond, tea_profiles(*)');
   if (error) throw error;
   return (data || []).flatMap((row) => {
     const profile = row.tea_profiles as unknown as TeaProfileRow | null;
-    return profile ? [{ id: row.id, profileId: row.profile_id, tutorEmail: row.tutor_email, profile: mapTeaProfileRow(profile) }] : [];
+    return profile ? [{ id: row.id, profileId: row.profile_id, tutorEmail: row.tutor_email, canRespond: Boolean(row.can_respond), profile: mapTeaProfileRow(profile) }] : [];
   });
 }

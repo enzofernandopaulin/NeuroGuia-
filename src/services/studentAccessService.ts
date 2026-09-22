@@ -52,3 +52,8 @@ export async function leaveStudentRoom(): Promise<void> {
   await client.rpc('revoke_student_access');
   await client.auth.signOut();
 }
+
+export async function revokeStudentAccessCode(profileId: string): Promise<void> {
+  const { error } = await requireSupabase().rpc('revoke_student_access_code', { p_profile_id: profileId });
+  if (error) throw error;
+}
