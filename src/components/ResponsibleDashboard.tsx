@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { GameProgress, ProfileOption, RoutineChangeNotice, RoutineTask, SupportRequest, TeaProfile } from '../types';
+import { GameProgress, PictogramSelection, ProfileOption, RoutineChangeNotice, RoutineTask, SupportRequest, TeaProfile } from '../types';
+import { PictogramImage } from './PictogramImage';
+import { PictogramPicker } from './PictogramPicker';
 
 interface Props {
   responsibleName: string;
@@ -10,8 +12,8 @@ interface Props {
   profile: TeaProfile;
   tasks: RoutineTask[];
   onToggleTask: (id: string) => void;
-  onAddTask: (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays?: number[], durationMinutes?: number | null) => void;
-  onUpdateTask: (id: string, changes: {title?: string; task_time?: string | null; steps?: string[]; duration_minutes?: number | null}) => Promise<void>;
+  onAddTask: (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays?: number[], durationMinutes?: number | null, pictogram?: PictogramSelection | null) => Promise<void> | void;
+  onUpdateTask: (id: string, changes: {title?: string; task_time?: string | null; steps?: string[]; duration_minutes?: number | null; pictogram_provider?: 'arasaac' | null; pictogram_id?: number | null; pictogram_label?: string | null}) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
   onEditProfile: () => void;
   onOpenTeaView: () => void;
@@ -55,6 +57,9 @@ export const ResponsibleDashboard: React.FC<Props> = ({
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0,10));
   const [recurrenceDays, setRecurrenceDays] = useState<number[]>([]);
   const [durationMinutes, setDurationMinutes] = useState('');
+  const [pictogram, setPictogram] = useState<PictogramSelection | null>(null);
+  const [savingTask, setSavingTask] = useState(false);
+  const [editingPictogramTaskId, setEditingPictogramTaskId] = useState<string | null>(null);
   const [pin, setPin] = useState('');
   const [tutorEmail, setTutorEmail] = useState('');
   const [changeTitle, setChangeTitle] = useState('');
@@ -67,12 +72,42 @@ export const ResponsibleDashboard: React.FC<Props> = ({
   const visibleTasks = tasks.filter((task) => !task.scheduledDate || task.scheduledDate === selectedDate || task.recurrenceDays?.includes(new Date(`${selectedDate}T12:00:00`).getDay()));
   const completed = visibleTasks.filter((task) => task.completed).length;
 
-  const add = () => {
-    onAddTask(title, time, stepsText.split('\n').map((item) => item.trim()), scheduledDate, recurrenceDays, durationMinutes ? Number(durationMinutes) : null);
-    setTitle('');
-    setTime('');
-    setStepsText('');
-    setDurationMinutes('');
+  const add = async () => {
+    if (savingTask) return;
+    if (!title.trim()) {
+      setFeedback('Informe o nome da tarefa antes de adicionar.');
+      return;
+    }
+    setFeedback('');
+    setSavingTask(true);
+    try {
+      await onAddTask(title, time, stepsText.split('\n').map((item) => item.trim()), scheduledDate, recurrenceDays, durationMinutes ? Number(durationMinutes) : null, pictogram);
+      setTitle('');
+      setTime('');
+      setStepsText('');
+      setDurationMinutes('');
+      setPictogram(null);
+      setFeedback('Tarefa adicionada à rotina.');
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : 'Não foi possível adicionar a tarefa.');
+    } finally {
+      setSavingTask(false);
+    }
+  };
+
+  const changeTaskPictogram = async (taskId: string, selected: PictogramSelection | null) => {
+    setFeedback('');
+    try {
+      await onUpdateTask(taskId, {
+        pictogram_provider: selected?.provider || null,
+        pictogram_id: selected?.id || null,
+        pictogram_label: selected?.label || null,
+      });
+      setEditingPictogramTaskId(null);
+      setFeedback(selected ? 'Pictograma da tarefa atualizado.' : 'Pictograma removido da tarefa.');
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : 'Não foi possível atualizar o pictograma.');
+    }
   };
 
   const configureAccess = async () => {
@@ -129,14 +164,19 @@ export const ResponsibleDashboard: React.FC<Props> = ({
 
           <div className="space-y-3">
             {visibleTasks.map((task) => (
-              <div key={task.id} className="w-full flex items-center gap-4 text-left rounded-2xl border border-outline-variant/60 p-4 hover:bg-surface-container-low">
+              <div key={task.id} className="w-full rounded-2xl border border-outline-variant/60 p-4 hover:bg-surface-container-low">
+              <div className="flex flex-wrap items-center gap-3 text-left">
                 <button aria-label={task.completed ? 'Reabrir tarefa' : 'Concluir tarefa'} onClick={() => onToggleTask(task.id)} className={`w-7 h-7 shrink-0 rounded-full border-2 flex items-center justify-center ${task.completed ? 'bg-tertiary border-tertiary text-white' : 'border-outline'}`}>{task.completed ? '✓' : ''}</button>
+                <PictogramImage id={task.pictogramId} label={task.pictogramLabel || task.title} className="w-14 h-14" />
                 <div className="flex-1">
                   <div className={`font-bold ${task.completed ? 'line-through opacity-60' : ''}`}>{task.title}</div>
                   <div className="text-xs text-on-surface-variant mt-1">{task.time} • {task.category}{task.durationMinutes ? ` • ${task.durationMinutes} min` : ''}</div>
                 </div>
                 <button onClick={async() => { const nextTitle = window.prompt('Novo nome da tarefa:', task.title); if (nextTitle?.trim()) await onUpdateTask(task.id,{title:nextTitle.trim()}); }} className="rounded-xl border px-3 py-2 text-sm font-bold">Editar</button>
+                <button onClick={() => setEditingPictogramTaskId((current) => current === task.id ? null : task.id)} className="rounded-xl border border-primary text-primary px-3 py-2 text-sm font-bold">Pictograma</button>
                 <button onClick={() => setConfirmDeleteTask(task.id)} className="rounded-xl border border-error text-error px-3 py-2 text-sm font-bold">Excluir</button>
+              </div>
+              {editingPictogramTaskId === task.id && <PictogramPicker value={task.pictogramId ? { provider: 'arasaac', id: task.pictogramId, label: task.pictogramLabel || task.title, imageUrl: '' } : null} onChange={(selected) => changeTaskPictogram(task.id, selected)} suggestedSearch={task.title} />}
               </div>
             ))}
           </div>
@@ -206,7 +246,8 @@ export const ResponsibleDashboard: React.FC<Props> = ({
         </div>
         <fieldset className="mt-3"><legend className="text-sm font-bold">Repetir semanalmente (opcional)</legend><div className="flex flex-wrap gap-2 mt-2">{['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((day,index)=><label key={day} className="rounded-xl border px-3 py-2 text-sm"><input type="checkbox" checked={recurrenceDays.includes(index)} onChange={()=>setRecurrenceDays((days)=>days.includes(index)?days.filter((item)=>item!==index):[...days,index])} /> {day}</label>)}</div></fieldset>
         <textarea value={stepsText} onChange={(e) => setStepsText(e.target.value)} placeholder={'Etapas, uma por linha\nEx.: Pegue a escova\nColoque a pasta'} className="w-full min-h-28 rounded-2xl border-2 border-outline-variant p-4 mt-3" />
-        <button onClick={add} className="mt-3 rounded-2xl bg-primary text-white font-extrabold px-6 py-3.5">Adicionar tarefa</button>
+        <PictogramPicker value={pictogram} onChange={setPictogram} suggestedSearch={title} />
+        <button onClick={add} disabled={savingTask || !title.trim()} className="mt-3 rounded-2xl bg-primary text-white font-extrabold px-6 py-3.5 disabled:opacity-50">{savingTask ? 'Salvando...' : 'Adicionar tarefa'}</button>
       </section>
     </main>
   );

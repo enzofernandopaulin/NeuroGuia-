@@ -52,6 +52,16 @@ export interface RoutineTask {
   recurrenceDays?: number[];
   archived?: boolean;
   durationMinutes?: number | null;
+  pictogramProvider?: 'arasaac' | null;
+  pictogramId?: number | null;
+  pictogramLabel?: string | null;
+}
+
+export interface PictogramSelection {
+  provider: 'arasaac';
+  id: number;
+  label: string;
+  imageUrl: string;
 }
 
 export type SupportRequestKind = 'ajuda' | 'nao-entendi' | 'me-perdi';

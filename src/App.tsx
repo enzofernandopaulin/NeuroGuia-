@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AppView, GameProgress, ProfileOption, RoutineChangeNotice, RoutineTask, SupportRequest, SupportRequestKind, TeaProfile, TutorAssignment, UserRole } from './types';
+import { AppView, GameProgress, PictogramSelection, ProfileOption, RoutineChangeNotice, RoutineTask, SupportRequest, SupportRequestKind, TeaProfile, TutorAssignment, UserRole } from './types';
 import { WelcomeAuth } from './components/WelcomeAuth';
 import { ResetPassword } from './components/ResetPassword';
 import { ResponsibleOnboarding } from './components/ResponsibleOnboarding';
@@ -117,9 +117,9 @@ export default function App() {
     }
     catch { setTasks((current) => current.map((item) => item.id === id ? { ...item, completed: !completed } : item)); return false; }
   };
-  const addTask = async (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = [], durationMinutes?: number | null) => {
+  const addTask = async (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = [], durationMinutes?: number | null, pictogram?: PictogramSelection | null) => {
     if (!profileId || !title.trim()) return;
-    const task = await createRoutineTask(profileId, title, time, steps, scheduledDate, recurrenceDays, durationMinutes);
+    const task = await createRoutineTask(profileId, title, time, steps, scheduledDate, recurrenceDays, durationMinutes, pictogram);
     setTasks((current) => [...current, task].sort((a, b) => a.time.localeCompare(b.time)));
   };
 
