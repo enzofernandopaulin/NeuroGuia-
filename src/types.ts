@@ -55,6 +55,7 @@ export interface RoutineTask {
   pictogramProvider?: 'arasaac' | null;
   pictogramId?: number | null;
   pictogramLabel?: string | null;
+  pictograms?: PictogramSelection[];
 }
 
 export interface PictogramSelection {

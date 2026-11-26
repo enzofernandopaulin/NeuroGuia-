@@ -69,7 +69,9 @@ export const WelcomeAuth: React.FC<Props> = ({
       if (tab === 'cadastrar') {
         const result = await signUpResponsible(name, email, password);
         if (!result.session) {
-          throw new Error('A conta foi criada, mas a sessão não foi iniciada. Verifique a configuração de confirmação de e-mail no Supabase.');
+          setFeedback({ type: 'success', text: 'Conta criada. Confirme seu e-mail e depois entre com sua senha.' });
+          setTab('entrar');
+          return;
         }
         await onResponsibleAuthenticated(name, true);
       } else {

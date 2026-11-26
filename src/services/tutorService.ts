@@ -17,6 +17,13 @@ export async function removeTutor(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function listResponsibleTutorLinks(profileId: string): Promise<{id: string; email: string}[]> {
+  const { data, error } = await requireSupabase().from('tutor_links')
+    .select('id,tutor_email').eq('profile_id', profileId).order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map((item) => ({ id: item.id, email: item.tutor_email }));
+}
+
 export async function listTutorAssignments(): Promise<TutorAssignment[]> {
   const { data, error } = await requireSupabase().from('tutor_links')
     .select('id, profile_id, tutor_email, can_respond, tea_profiles(*)');

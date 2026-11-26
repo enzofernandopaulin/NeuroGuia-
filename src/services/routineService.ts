@@ -1,6 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { requireSupabase, requireStudentSupabase } from '../lib/supabase';
 import { PictogramSelection, RoutineChangeNotice, RoutineTask, SupportRequest, SupportRequestKind } from '../types';
+import { localDate, occursOn } from '../lib/routineDates';
+import { getArasaacImageUrl } from './arasaacService';
 
 type TaskRow = {
   id: string; profile_id: string; title: string; task_time: string | null;
@@ -11,6 +13,15 @@ type TaskRow = {
   pictogram_provider?: string | null;
   pictogram_id?: number | null;
   pictogram_label?: string | null;
+  pictograms?: unknown;
+};
+
+const mapPictograms = (row: TaskRow): PictogramSelection[] => {
+  if (Array.isArray(row.pictograms) && row.pictograms.length) return row.pictograms.flatMap((item) =>
+    item && item.provider === 'arasaac' && Number.isInteger(item.id) && item.id > 0 && typeof item.label === 'string'
+      ? [{ provider: 'arasaac' as const, id: item.id as number, label: item.label, imageUrl: getArasaacImageUrl(item.id) }] : []);
+  return row.pictogram_id ? [{ provider: 'arasaac', id: row.pictogram_id,
+    label: row.pictogram_label || row.title, imageUrl: getArasaacImageUrl(row.pictogram_id) }] : [];
 };
 
 const mapTask = (row: TaskRow): RoutineTask => ({
@@ -23,35 +34,41 @@ const mapTask = (row: TaskRow): RoutineTask => ({
   pictogramProvider: row.pictogram_provider === 'arasaac' ? 'arasaac' : null,
   pictogramId: row.pictogram_id ?? null,
   pictogramLabel: row.pictogram_label ?? null,
+  pictograms: mapPictograms(row),
 });
 
-async function listTasksWith(client: SupabaseClient, profileId: string): Promise<RoutineTask[]> {
+async function listTasksWith(client: SupabaseClient, profileId: string, date = localDate()): Promise<RoutineTask[]> {
   const { data, error } = await client.from('routine_tasks').select('*').eq('profile_id', profileId).eq('archived', false)
     .order('scheduled_date', { ascending: true }).order('sort_order', { ascending: true }).order('task_time', { ascending: true, nullsFirst: false });
   if (error) throw error;
-  return (data || []).map((row) => mapTask(row as TaskRow));
+  const tasks = (data || []).map((row) => mapTask(row as TaskRow)).filter((task) => occursOn(task, date));
+  if (!tasks.length) return tasks;
+  const { data: completions, error: completionError } = await client.from('routine_task_completions')
+    .select('task_id').eq('profile_id', profileId).eq('occurrence_date', date);
+  if (completionError) throw completionError;
+  const completedIds = new Set((completions || []).map((item) => item.task_id));
+  return tasks.map((task) => ({ ...task, completed: completedIds.has(task.id) }));
 }
 
-export const listResponsibleTasks = (profileId: string) => listTasksWith(requireSupabase(), profileId);
-export const listStudentTasks = (profileId: string) => listTasksWith(requireStudentSupabase(), profileId);
+export const listResponsibleTasks = (profileId: string, date?: string) => listTasksWith(requireSupabase(), profileId, date);
+export const listStudentTasks = (profileId: string, date?: string) => listTasksWith(requireStudentSupabase(), profileId, date);
 
-export async function createRoutineTask(profileId: string, title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = [], durationMinutes?: number | null, pictogram?: PictogramSelection | null) {
+export async function createRoutineTask(profileId: string, title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = [], durationMinutes?: number | null, pictograms: PictogramSelection[] = []) {
   const client = requireSupabase();
   const { data, error } = await client.from('routine_tasks').insert({
     profile_id: profileId, title: title.trim(), task_time: time || null,
     steps: steps.filter(Boolean), category: 'Rotina', scheduled_date: scheduledDate || new Date().toISOString().slice(0, 10), recurrence_days: recurrenceDays,
     duration_minutes: durationMinutes || null,
-    ...(pictogram ? {
-      pictogram_provider: pictogram.provider,
-      pictogram_id: pictogram.id,
-      pictogram_label: pictogram.label.trim().slice(0, 120) || null,
-    } : {}),
+    pictograms: pictograms.map(({provider,id,label}) => ({provider,id,label:label.trim().slice(0,120)})),
+    pictogram_provider: pictograms[0]?.provider || null,
+    pictogram_id: pictograms[0]?.id || null,
+    pictogram_label: pictograms[0]?.label.trim().slice(0,120) || null,
   }).select('*').single();
   if (error) throw error;
   return mapTask(data as TaskRow);
 }
 
-export async function updateRoutineTask(taskId: string, changes: {title?: string; task_time?: string | null; steps?: string[]; scheduled_date?: string; recurrence_days?: number[]; sort_order?: number; duration_minutes?: number | null; pictogram_provider?: 'arasaac' | null; pictogram_id?: number | null; pictogram_label?: string | null}) {
+export async function updateRoutineTask(taskId: string, changes: {title?: string; task_time?: string | null; steps?: string[]; scheduled_date?: string; recurrence_days?: number[]; sort_order?: number; duration_minutes?: number | null; pictogram_provider?: 'arasaac' | null; pictogram_id?: number | null; pictogram_label?: string | null; pictograms?: {provider:'arasaac';id:number;label:string}[]}) {
   const { error } = await requireSupabase().from('routine_tasks').update(changes).eq('id', taskId);
   if (error) throw error;
 }
@@ -69,14 +86,17 @@ export async function archiveRoutineTask(taskId: string) {
   if (error) throw error;
 }
 
-export async function setTaskCompleted(taskId: string, completed: boolean, student = false) {
+export async function setTaskCompleted(taskId: string, completed: boolean, date: string, student = false, profileId?: string) {
   const client = student ? requireStudentSupabase() : requireSupabase();
   if (student) {
-    const { error } = await client.rpc('set_student_task_completed', { p_task_id: taskId, p_completed: completed });
+    const { error } = await client.rpc('set_student_task_occurrence_completed', { p_task_id: taskId, p_date: date, p_completed: completed });
     if (error) throw error;
     return;
   }
-  const { error } = await client.from('routine_tasks').update({ completed }).eq('id', taskId);
+  if (!profileId) throw new Error('Perfil do estudante não encontrado.');
+  const { error } = completed
+    ? await client.from('routine_task_completions').upsert({ task_id: taskId, profile_id: profileId, occurrence_date: date }, { onConflict: 'task_id,occurrence_date' })
+    : await client.from('routine_task_completions').delete().eq('task_id', taskId).eq('profile_id', profileId).eq('occurrence_date', date);
   if (error) throw error;
 }
 

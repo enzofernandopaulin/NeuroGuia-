@@ -9,7 +9,8 @@ interface Props {
 
 export const PictogramImage: React.FC<Props> = ({ id, label, className = 'w-16 h-16' }) => {
   const [failedId, setFailedId] = useState<number | null>(null);
-  if (!id || failedId === id) return null;
+  if (!id) return null;
+  if (failedId === id) return <span role="img" aria-label={`Imagem indisponível: ${label || 'tarefa'}`} className={`${className} shrink-0 rounded-2xl border border-outline-variant bg-white grid place-items-center text-center text-xs p-1`}>Imagem indisponível</span>;
 
   return (
     <img

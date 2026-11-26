@@ -12,8 +12,9 @@ import { getCurrentSession, signOutResponsible } from './services/authService';
 import { createTeaProfile, listTeaProfiles, mapTeaProfileRow, mapTeaProfileToUpdate, updateTeaProfile } from './services/teaProfileService';
 import { acknowledgeRoutineChange, archiveRoutineTask, createRoutineChange, createRoutineTask, createSupportRequest, listResponsibleChanges, listResponsibleTasks, listStudentChanges, listStudentTasks, listSupportRequests, resolveSupportRequest, setTaskCompleted, setTutorTaskDuration, updateRoutineTask } from './services/routineService';
 import { configureStudentAccess, getCurrentStudentProfile, getStudentAccessCode, leaveStudentRoom, revokeStudentAccessCode } from './services/studentAccessService';
-import { inviteTutor, listTutorAssignments } from './services/tutorService';
+import { inviteTutor, listResponsibleTutorLinks, listTutorAssignments, removeTutor } from './services/tutorService';
 import { awardStars, getGameProgress } from './services/gameService';
+import { localDate } from './lib/routineDates';
 
 const defaultProfile: TeaProfile = {
   name: '', ageGroup: 'adolescente', supportLevel: 'nao-informado', communicationPreference: 'texto-imagem',
@@ -32,20 +33,24 @@ export default function App() {
   const [routineChanges, setRoutineChanges] = useState<RoutineChangeNotice[]>([]);
   const [accessCode, setAccessCode] = useState<string | null>(null);
   const [tutorAssignments, setTutorAssignments] = useState<TutorAssignment[]>([]);
+  const [responsibleTutorLinks, setResponsibleTutorLinks] = useState<{id: string; email: string}[]>([]);
   const [authReady, setAuthReady] = useState(false);
   const [profiles, setProfiles] = useState<ProfileOption[]>([]);
   const [gameProgress, setGameProgress] = useState<GameProgress | null>(null);
+  const [responsibleDate, setResponsibleDate] = useState(localDate);
+  const [startupError, setStartupError] = useState('');
 
-  const loadResponsibleData = async (id: string) => {
-    const [loadedTasks, loadedRequests, loadedChanges, code] = await Promise.all([
-      listResponsibleTasks(id), listSupportRequests(id), listResponsibleChanges(id), getStudentAccessCode(id),
+  const loadResponsibleData = async (id: string, date = localDate()) => {
+    const [loadedTasks, loadedRequests, loadedChanges, code, links] = await Promise.all([
+      listResponsibleTasks(id, date), listSupportRequests(id), listResponsibleChanges(id), getStudentAccessCode(id), listResponsibleTutorLinks(id),
     ]);
     setTasks(loadedTasks); setSupportRequests(loadedRequests); setRoutineChanges(loadedChanges); setAccessCode(code);
+    setResponsibleTutorLinks(links);
     try { setGameProgress(await getGameProgress(id)); } catch { setGameProgress({ profileId: id, stars: 0, mascot: 'coruja', inventory: [] }); }
   };
 
   const selectResponsibleProfile = async (option: ProfileOption) => {
-    setProfileId(option.id); setProfile(option.profile); await loadResponsibleData(option.id);
+    setProfileId(option.id); setProfile(option.profile); setResponsibleDate(localDate()); await loadResponsibleData(option.id);
   };
 
   const loadTutorData = async () => {
@@ -53,6 +58,8 @@ export default function App() {
     setTutorAssignments(assignments);
     if (!assignments.length) { setTasks([]); setSupportRequests([]); return; }
     const id = assignments[0].profileId;
+    setProfile(assignments[0].profile);
+    setProfileId(id);
     const [loadedTasks, loadedRequests] = await Promise.all([listResponsibleTasks(id), listSupportRequests(id)]);
     setTasks(loadedTasks); setSupportRequests(loadedRequests);
   };
@@ -83,6 +90,8 @@ export default function App() {
           const [studentTasks, changes] = await Promise.all([listStudentTasks(studentProfile.id), listStudentChanges(studentProfile.id)]);
           setTasks(studentTasks); setRoutineChanges(changes); setView('tea-home');
         }
+      } catch (error) {
+        if (mounted) setStartupError(error instanceof Error ? error.message : 'Não foi possível carregar seus dados.');
       } finally { if (mounted) setAuthReady(true); }
     };
     const subscription = supabase?.auth.onAuthStateChange((event) => {
@@ -98,10 +107,11 @@ export default function App() {
     if (!supabase || role !== 'responsavel' || !profileId) return;
     const channel = supabase.channel(`profile-live-${profileId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_requests', filter: `profile_id=eq.${profileId}` }, async () => setSupportRequests(await listSupportRequests(profileId)))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'routine_tasks', filter: `profile_id=eq.${profileId}` }, async () => setTasks(await listResponsibleTasks(profileId)))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'routine_tasks', filter: `profile_id=eq.${profileId}` }, async () => setTasks(await listResponsibleTasks(profileId, responsibleDate)))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'routine_task_completions', filter: `profile_id=eq.${profileId}` }, async () => setTasks(await listResponsibleTasks(profileId, responsibleDate)))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [profileId, role]);
+  }, [profileId, role, responsibleDate]);
 
   const nextTask = useMemo(() => tasks.find((task) => !task.completed), [tasks]);
   const toggleTask = async (id: string): Promise<boolean> => {
@@ -109,18 +119,18 @@ export default function App() {
     const completed = !task.completed;
     setTasks((current) => current.map((item) => item.id === id ? { ...item, completed } : item));
     try {
-      await setTaskCompleted(id, completed, role === 'tea');
+      await setTaskCompleted(id, completed, role === 'tea' ? localDate() : responsibleDate, role === 'tea', profileId || undefined);
       if (role === 'tea' && completed && profileId) {
-        try { const stars = await awardStars(profileId, `task:${id}:${new Date().toISOString().slice(0,10)}`, 'tarefa', 5); setGameProgress((current) => current ? { ...current, stars } : { profileId, stars, mascot: 'coruja', inventory: [] }); } catch { /* gamificação não bloqueia a rotina */ }
+        try { const stars = await awardStars(profileId, `task:${id}:${localDate()}`, 'tarefa', 5); setGameProgress((current) => current ? { ...current, stars } : { profileId, stars, mascot: 'coruja', inventory: [] }); } catch { /* gamificação não bloqueia a rotina */ }
       }
       return true;
     }
     catch { setTasks((current) => current.map((item) => item.id === id ? { ...item, completed: !completed } : item)); return false; }
   };
-  const addTask = async (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = [], durationMinutes?: number | null, pictogram?: PictogramSelection | null) => {
+  const addTask = async (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = [], durationMinutes?: number | null, pictograms: PictogramSelection[] = []) => {
     if (!profileId || !title.trim()) return;
-    const task = await createRoutineTask(profileId, title, time, steps, scheduledDate, recurrenceDays, durationMinutes, pictogram);
-    setTasks((current) => [...current, task].sort((a, b) => a.time.localeCompare(b.time)));
+    await createRoutineTask(profileId, title, time, steps, scheduledDate, recurrenceDays, durationMinutes, pictograms);
+    setTasks(await listResponsibleTasks(profileId, responsibleDate));
   };
 
   const handleResponsibleAuthenticated = async (name: string, isNewAccount: boolean) => {
@@ -135,6 +145,8 @@ export default function App() {
   };
   const selectTutorAssignment = async (assignment: TutorAssignment) => {
     const [loadedTasks, loadedRequests] = await Promise.all([listResponsibleTasks(assignment.profileId), listSupportRequests(assignment.profileId)]);
+    setProfile(assignment.profile);
+    setProfileId(assignment.profileId);
     setTasks(loadedTasks); setSupportRequests(loadedRequests);
   };
   const handleStudentAuthenticated = async () => {
@@ -155,14 +167,15 @@ export default function App() {
   const leaveRoom = async () => { await leaveStudentRoom(); setProfileId(null); setTasks([]); setRole('responsavel'); setView('welcome'); };
 
   if (!authReady) return <div className="min-h-screen flex items-center justify-center bg-background"><div className="text-center"><div className="text-2xl font-extrabold">NeuroGuia</div><div className="text-sm mt-2">Verificando sua sessão...</div></div></div>;
+  if (startupError) return <main className="min-h-screen grid place-content-center p-6 text-center"><h1 className="text-2xl font-bold">Não foi possível carregar o NeuroGuia</h1><p role="alert">{startupError}</p><button className="mt-5 rounded-xl bg-primary text-white p-3" onClick={() => window.location.reload()}>Tentar novamente</button></main>;
 
-  return <div className={profile.softVisualMode ? 'min-h-screen bg-[#f5f5ef] text-[#273029]' : 'min-h-screen bg-background text-on-surface'}>
+  return <div data-soft-visual={profile.softVisualMode || profile.supportLevel === 'nivel-2' || profile.supportLevel === 'nivel-3'} data-reduce-motion={profile.sensoryTriggers.includes('animacoes')} data-age-group={profile.ageGroup} className={profile.softVisualMode ? 'min-h-screen bg-[#f5f5ef] text-[#273029]' : 'min-h-screen bg-background text-on-surface'}>
     {view === 'welcome' && <WelcomeAuth onResponsibleAuthenticated={handleResponsibleAuthenticated} onTeaAccess={() => setView('tea-login')} onTutorAuthenticated={handleTutorAuthenticated} />}
     {view === 'reset-password' && <ResetPassword onDone={() => setView('responsavel-dashboard')} />}
     {view === 'tea-login' && <StudentLogin onBack={() => setView('welcome')} onAuthenticated={handleStudentAuthenticated} />}
     {view === 'responsavel-onboarding' && <ResponsibleOnboarding initialProfile={profile} onBack={() => setView('welcome')} onComplete={handleProfileComplete} />}
-    {view === 'responsavel-dashboard' && profileId && <ResponsibleDashboard responsibleName={responsibleName} profiles={profiles} activeProfileId={profileId} onSelectProfile={selectResponsibleProfile} onAddProfile={() => { setProfileId(null); setProfile(defaultProfile); setView('responsavel-onboarding'); }} profile={profile} tasks={tasks} onToggleTask={toggleTask} onAddTask={addTask} onUpdateTask={async(id, changes) => { await updateRoutineTask(id, changes); setTasks(await listResponsibleTasks(profileId)); }} onDeleteTask={async(id) => { await archiveRoutineTask(id); setTasks((items) => items.filter((item) => item.id !== id)); }} onEditProfile={() => setView('responsavel-onboarding')} onOpenTeaView={() => setView('tea-home')} onLogout={logout} accessCode={accessCode} supportRequests={supportRequests} routineChanges={routineChanges} gameProgress={gameProgress} onConfigureAccess={async (pin) => setAccessCode(await configureStudentAccess(profileId, pin))} onRevokeAccess={async() => { await revokeStudentAccessCode(profileId); setAccessCode(null); }} onResolveRequest={async (id) => { await resolveSupportRequest(id); setSupportRequests((items) => items.map((item) => item.id === id ? { ...item, status: 'resolvido' } : item)); }} onCreateRoutineChange={async (title, description, at) => { await createRoutineChange(profileId, title, description, at); setRoutineChanges(await listResponsibleChanges(profileId)); }} onInviteTutor={(email) => inviteTutor(profileId, email)} />}
-    {view === 'tea-home' && profileId && <TeaHome profile={profile} tasks={tasks} nextTask={nextTask} gameProgress={gameProgress} onToggleTask={toggleTask} onBackToResponsible={() => setView('responsavel-dashboard')} role={role} routineChanges={routineChanges} onSupportRequest={async (kind: SupportRequestKind, task?: RoutineTask) => { await createSupportRequest(profileId, task?.id, kind, `${profile.name} solicitou apoio${task ? ` em: ${task.title}` : ''}.`); if (role === 'tea') { try { const stars = await awardStars(profileId, `support:${kind}:${Date.now()}`, kind === 'ajuda' ? 'ajuda' : 'comunicacao', 2); setGameProgress((current) => current ? {...current,stars} : current); } catch {} } }} onAcknowledgeChange={async (id) => { await acknowledgeRoutineChange(id); setRoutineChanges((items) => items.map((item) => item.id === id ? { ...item, acknowledged: true } : item)); }} onLeaveRoom={leaveRoom} />}
+    {view === 'responsavel-dashboard' && profileId && <ResponsibleDashboard responsibleName={responsibleName} profiles={profiles} activeProfileId={profileId} onSelectProfile={selectResponsibleProfile} onAddProfile={() => { setProfileId(null); setProfile(defaultProfile); setView('responsavel-onboarding'); }} profile={profile} tasks={tasks} selectedDate={responsibleDate} onSelectDate={async(date) => { setResponsibleDate(date); setTasks(await listResponsibleTasks(profileId, date)); }} onToggleTask={toggleTask} onAddTask={addTask} onUpdateTask={async(id, changes) => { await updateRoutineTask(id, changes); setTasks(await listResponsibleTasks(profileId, responsibleDate)); }} onDeleteTask={async(id) => { await archiveRoutineTask(id); setTasks((items) => items.filter((item) => item.id !== id)); }} onEditProfile={() => setView('responsavel-onboarding')} onOpenTeaView={async() => { setTasks(await listResponsibleTasks(profileId, localDate())); setView('tea-home'); }} onLogout={logout} accessCode={accessCode} supportRequests={supportRequests} routineChanges={routineChanges} gameProgress={gameProgress} onConfigureAccess={async (pin) => setAccessCode(await configureStudentAccess(profileId, pin))} onRevokeAccess={async() => { await revokeStudentAccessCode(profileId); setAccessCode(null); }} onResolveRequest={async (id) => { await resolveSupportRequest(id); setSupportRequests((items) => items.map((item) => item.id === id ? { ...item, status: 'resolvido' } : item)); }} onCreateRoutineChange={async (title, description, at) => { await createRoutineChange(profileId, title, description, at); setRoutineChanges(await listResponsibleChanges(profileId)); }} onInviteTutor={async(email) => { await inviteTutor(profileId, email); setResponsibleTutorLinks(await listResponsibleTutorLinks(profileId)); }} tutorLinks={responsibleTutorLinks} onRemoveTutor={async(id) => { await removeTutor(id); setResponsibleTutorLinks(await listResponsibleTutorLinks(profileId)); }} />}
+    {view === 'tea-home' && profileId && <TeaHome profile={profile} tasks={tasks} nextTask={nextTask} gameProgress={gameProgress} onToggleTask={toggleTask} onBackToResponsible={() => { void listResponsibleTasks(profileId, responsibleDate).then(setTasks); setView('responsavel-dashboard'); }} role={role} routineChanges={routineChanges} onSupportRequest={async (kind: SupportRequestKind, task?: RoutineTask) => { await createSupportRequest(profileId, task?.id, kind, `${profile.name} solicitou apoio${task ? ` em: ${task.title}` : ''}.`); if (role === 'tea') { try { const stars = await awardStars(profileId, `support:${kind}:${Date.now()}`, kind === 'ajuda' ? 'ajuda' : 'comunicacao', 2); setGameProgress((current) => current ? {...current,stars} : current); } catch {} } }} onAcknowledgeChange={async (id) => { await acknowledgeRoutineChange(id); setRoutineChanges((items) => items.map((item) => item.id === id ? { ...item, acknowledged: true } : item)); }} onLeaveRoom={leaveRoom} />}
     {view === 'tutor-dashboard' && <TutorDashboard name={responsibleName} assignments={tutorAssignments} tasks={tasks} requests={supportRequests} onSelectAssignment={selectTutorAssignment} onLogout={logout} onSetTaskDuration={async(taskId,durationMinutes)=>{await setTutorTaskDuration(taskId,durationMinutes);setTasks((items)=>items.map((item)=>item.id===taskId?{...item,durationMinutes}:item));}} />}
   </div>;
 }
