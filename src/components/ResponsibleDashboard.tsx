@@ -16,8 +16,8 @@ interface Props {
   profile: TeaProfile;
   tasks: RoutineTask[];
   onToggleTask: (id: string) => void;
-  onAddTask: (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays?: number[], durationMinutes?: number | null, pictogram?: PictogramSelection | null) => Promise<void> | void;
-  onUpdateTask: (id: string, changes: {title?: string; task_time?: string | null; scheduled_date?: string; recurrence_days?: number[]; steps?: string[]; duration_minutes?: number | null; pictogram_provider?: 'arasaac' | null; pictogram_id?: number | null; pictogram_label?: string | null}) => Promise<void>;
+  onAddTask: (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays?: number[], durationMinutes?: number | null, pictograms?: PictogramSelection[]) => Promise<void> | void;
+  onUpdateTask: (id: string, changes: {title?: string; task_time?: string | null; scheduled_date?: string; recurrence_days?: number[]; steps?: string[]; duration_minutes?: number | null; pictogram_provider?: 'arasaac' | null; pictogram_id?: number | null; pictogram_label?: string | null; pictograms?: {provider:'arasaac';id:number;label:string}[]}) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
   onEditProfile: () => void;
   onOpenTeaView: () => void;
@@ -63,7 +63,7 @@ export const ResponsibleDashboard: React.FC<Props> = ({
   const [scheduledDate, setScheduledDate] = useState(localDate);
   const [recurrenceDays, setRecurrenceDays] = useState<number[]>([]);
   const [durationMinutes, setDurationMinutes] = useState('');
-  const [pictogram, setPictogram] = useState<PictogramSelection | null>(null);
+  const [pictograms, setPictograms] = useState<PictogramSelection[]>([]);
   const [savingTask, setSavingTask] = useState(false);
   const [editingTask, setEditingTask] = useState<RoutineTask | null>(null);
   const [pin, setPin] = useState('');
@@ -89,13 +89,13 @@ export const ResponsibleDashboard: React.FC<Props> = ({
     setFeedback('');
     setSavingTask(true);
     try {
-      await onAddTask(title, time, stepsText.split('\n').map((item) => item.trim()), scheduledDate, recurrenceDays, durationMinutes ? Number(durationMinutes) : null, pictogram);
+      await onAddTask(title, time, stepsText.split('\n').map((item) => item.trim()), scheduledDate, recurrenceDays, durationMinutes ? Number(durationMinutes) : null, pictograms);
       setTitle('');
       setTime('');
       setStepsText('');
       setRecurrenceDays([]);
       setDurationMinutes('');
-      setPictogram(null);
+      setPictograms([]);
       setFeedback('Tarefa adicionada à rotina.');
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Não foi possível adicionar a tarefa.');
@@ -161,7 +161,7 @@ export const ResponsibleDashboard: React.FC<Props> = ({
               <div key={task.id} className="w-full rounded-2xl border border-outline-variant/60 p-4 hover:bg-surface-container-low">
               <div className="flex flex-wrap items-center gap-3 text-left">
                 <button aria-label={task.completed ? 'Reabrir tarefa' : 'Concluir tarefa'} onClick={() => onToggleTask(task.id)} className={`w-7 h-7 shrink-0 rounded-full border-2 flex items-center justify-center ${task.completed ? 'bg-tertiary border-tertiary text-white' : 'border-outline'}`}>{task.completed ? '✓' : ''}</button>
-                <PictogramImage id={task.pictogramId} label={task.pictogramLabel || task.title} className="w-14 h-14" />
+                {(task.pictograms || []).slice(0, 3).map((picture) => <PictogramImage key={picture.id} id={picture.id} label={picture.label} className="w-14 h-14" />)}
                 <div className="flex-1">
                   <div className={`font-bold ${task.completed ? 'line-through opacity-60' : ''}`}>{task.title}</div>
                   <div className="text-xs text-on-surface-variant mt-1">{task.time} • {task.category}{task.durationMinutes ? ` • ${task.durationMinutes} min` : ''}</div>
@@ -240,7 +240,7 @@ export const ResponsibleDashboard: React.FC<Props> = ({
         </div>
         <fieldset className="mt-3"><legend className="text-sm font-bold">Repetir semanalmente (opcional)</legend><div className="flex flex-wrap gap-2 mt-2">{['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((day,index)=><label key={day} className="rounded-xl border px-3 py-2 text-sm"><input type="checkbox" checked={recurrenceDays.includes(index)} onChange={()=>setRecurrenceDays((days)=>days.includes(index)?days.filter((item)=>item!==index):[...days,index])} /> {day}</label>)}</div></fieldset>
         <textarea value={stepsText} onChange={(e) => setStepsText(e.target.value)} placeholder={'Etapas, uma por linha\nEx.: Pegue a escova\nColoque a pasta'} className="w-full min-h-28 rounded-2xl border-2 border-outline-variant p-4 mt-3" />
-        <PictogramPicker value={pictogram} onChange={setPictogram} suggestedSearch={title} />
+        <PictogramPicker value={pictograms} onChange={setPictograms} suggestedSearch={title} />
         <button onClick={add} disabled={savingTask || !title.trim()} className="mt-3 rounded-2xl bg-primary text-white font-extrabold px-6 py-3.5 disabled:opacity-50">{savingTask ? 'Salvando...' : 'Adicionar tarefa'}</button>
       </section>
     </main>

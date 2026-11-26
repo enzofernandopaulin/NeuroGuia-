@@ -2,6 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { requireSupabase, requireStudentSupabase } from '../lib/supabase';
 import { PictogramSelection, RoutineChangeNotice, RoutineTask, SupportRequest, SupportRequestKind } from '../types';
 import { localDate, occursOn } from '../lib/routineDates';
+import { getArasaacImageUrl } from './arasaacService';
 
 type TaskRow = {
   id: string; profile_id: string; title: string; task_time: string | null;
@@ -12,6 +13,15 @@ type TaskRow = {
   pictogram_provider?: string | null;
   pictogram_id?: number | null;
   pictogram_label?: string | null;
+  pictograms?: unknown;
+};
+
+const mapPictograms = (row: TaskRow): PictogramSelection[] => {
+  if (Array.isArray(row.pictograms) && row.pictograms.length) return row.pictograms.flatMap((item) =>
+    item && item.provider === 'arasaac' && Number.isInteger(item.id) && item.id > 0 && typeof item.label === 'string'
+      ? [{ provider: 'arasaac' as const, id: item.id as number, label: item.label, imageUrl: getArasaacImageUrl(item.id) }] : []);
+  return row.pictogram_id ? [{ provider: 'arasaac', id: row.pictogram_id,
+    label: row.pictogram_label || row.title, imageUrl: getArasaacImageUrl(row.pictogram_id) }] : [];
 };
 
 const mapTask = (row: TaskRow): RoutineTask => ({
@@ -24,6 +34,7 @@ const mapTask = (row: TaskRow): RoutineTask => ({
   pictogramProvider: row.pictogram_provider === 'arasaac' ? 'arasaac' : null,
   pictogramId: row.pictogram_id ?? null,
   pictogramLabel: row.pictogram_label ?? null,
+  pictograms: mapPictograms(row),
 });
 
 async function listTasksWith(client: SupabaseClient, profileId: string, date = localDate()): Promise<RoutineTask[]> {
@@ -42,23 +53,22 @@ async function listTasksWith(client: SupabaseClient, profileId: string, date = l
 export const listResponsibleTasks = (profileId: string, date?: string) => listTasksWith(requireSupabase(), profileId, date);
 export const listStudentTasks = (profileId: string, date?: string) => listTasksWith(requireStudentSupabase(), profileId, date);
 
-export async function createRoutineTask(profileId: string, title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = [], durationMinutes?: number | null, pictogram?: PictogramSelection | null) {
+export async function createRoutineTask(profileId: string, title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = [], durationMinutes?: number | null, pictograms: PictogramSelection[] = []) {
   const client = requireSupabase();
   const { data, error } = await client.from('routine_tasks').insert({
     profile_id: profileId, title: title.trim(), task_time: time || null,
     steps: steps.filter(Boolean), category: 'Rotina', scheduled_date: scheduledDate || new Date().toISOString().slice(0, 10), recurrence_days: recurrenceDays,
     duration_minutes: durationMinutes || null,
-    ...(pictogram ? {
-      pictogram_provider: pictogram.provider,
-      pictogram_id: pictogram.id,
-      pictogram_label: pictogram.label.trim().slice(0, 120) || null,
-    } : {}),
+    pictograms: pictograms.map(({provider,id,label}) => ({provider,id,label:label.trim().slice(0,120)})),
+    pictogram_provider: pictograms[0]?.provider || null,
+    pictogram_id: pictograms[0]?.id || null,
+    pictogram_label: pictograms[0]?.label.trim().slice(0,120) || null,
   }).select('*').single();
   if (error) throw error;
   return mapTask(data as TaskRow);
 }
 
-export async function updateRoutineTask(taskId: string, changes: {title?: string; task_time?: string | null; steps?: string[]; scheduled_date?: string; recurrence_days?: number[]; sort_order?: number; duration_minutes?: number | null; pictogram_provider?: 'arasaac' | null; pictogram_id?: number | null; pictogram_label?: string | null}) {
+export async function updateRoutineTask(taskId: string, changes: {title?: string; task_time?: string | null; steps?: string[]; scheduled_date?: string; recurrence_days?: number[]; sort_order?: number; duration_minutes?: number | null; pictogram_provider?: 'arasaac' | null; pictogram_id?: number | null; pictogram_label?: string | null; pictograms?: {provider:'arasaac';id:number;label:string}[]}) {
   const { error } = await requireSupabase().from('routine_tasks').update(changes).eq('id', taskId);
   if (error) throw error;
 }

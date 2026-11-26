@@ -127,9 +127,9 @@ export default function App() {
     }
     catch { setTasks((current) => current.map((item) => item.id === id ? { ...item, completed: !completed } : item)); return false; }
   };
-  const addTask = async (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = [], durationMinutes?: number | null, pictogram?: PictogramSelection | null) => {
+  const addTask = async (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = [], durationMinutes?: number | null, pictograms: PictogramSelection[] = []) => {
     if (!profileId || !title.trim()) return;
-    await createRoutineTask(profileId, title, time, steps, scheduledDate, recurrenceDays, durationMinutes, pictogram);
+    await createRoutineTask(profileId, title, time, steps, scheduledDate, recurrenceDays, durationMinutes, pictograms);
     setTasks(await listResponsibleTasks(profileId, responsibleDate));
   };
 

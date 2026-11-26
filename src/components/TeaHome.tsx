@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { GameProgress, RoutineChangeNotice, RoutineTask, SupportRequestKind, TeaProfile, UserRole } from '../types';
 import { getSupportPreset } from '../lib/supportPresets';
-import { PictogramImage } from './PictogramImage';
+import { TaskPictograms } from './TaskPictograms';
 
 interface Props {
   profile: TeaProfile;
@@ -204,8 +204,8 @@ export const TeaHome: React.FC<Props> = ({
       {!activeTask && nextTask && (
         <section className={`rounded-3xl border p-6 shadow-sm mb-5 ${surface}`}>
           <p className="text-xs font-extrabold uppercase tracking-wider opacity-60">Agora</p>
-          {imageMode && nextTask.pictogramId ? (
-            <PictogramImage id={nextTask.pictogramId} label={nextTask.pictogramLabel || nextTask.title} className="my-5 w-28 h-28" />
+          {imageMode && nextTask.pictograms?.length ? (
+            <TaskPictograms task={nextTask} />
           ) : imageMode && (
             <div className={`my-5 w-20 h-20 rounded-3xl flex items-center justify-center ${taskAccent}`}>
               <span className="material-symbols-outlined text-4xl">task_alt</span>
@@ -220,7 +220,7 @@ export const TeaHome: React.FC<Props> = ({
       {activeTask && (
         <section className={`rounded-3xl border p-6 shadow-sm mb-5 ${surface}`}>
           <p className="text-xs font-extrabold uppercase tracking-wider opacity-60">Fazendo agora</p>
-          {imageMode && activeTask.pictogramId && <PictogramImage id={activeTask.pictogramId} label={activeTask.pictogramLabel || activeTask.title} className="mt-4 w-28 h-28" />}
+          {imageMode && <TaskPictograms task={activeTask} />}
           <h2 className="text-2xl font-extrabold mt-2">{activeTask.title}</h2>
           {activeTask.durationMinutes ? (
             <div className={`mt-5 rounded-2xl border p-4 text-center ${visualSensitive ? 'bg-[#ecece6] border-[#c9c9c0]' : 'bg-primary-fixed border-primary-fixed-dim'}`}>
@@ -260,7 +260,7 @@ export const TeaHome: React.FC<Props> = ({
             {visibleLater.map((task) => (
               <button key={task.id} onClick={() => startTask(task)} className={`w-full rounded-2xl p-4 text-left ${visualSensitive ? 'bg-[#ecece6]' : 'bg-surface-container-low'}`}>
                 <div className="flex items-center gap-3">
-                  {imageMode && <PictogramImage id={task.pictogramId} label={task.pictogramLabel || task.title} className="w-14 h-14" />}
+                  {imageMode && <TaskPictograms task={task} compact />}
                   <div><div className="font-bold">{task.title}</div><div className="text-xs opacity-60 mt-1">{task.time}</div></div>
                 </div>
               </button>
@@ -281,7 +281,7 @@ export const TeaHome: React.FC<Props> = ({
             <h2 className="text-2xl font-extrabold">Vamos continuar juntos.</h2>
             <p className="mt-2 text-sm opacity-70">Agora você precisa fazer:</p>
             <div className={`rounded-2xl p-4 my-4 text-lg font-extrabold ${visualSensitive ? 'bg-[#ecece6]' : 'bg-surface-container-low'}`}>
-              {imageMode && currentHelpTask?.pictogramId && <PictogramImage id={currentHelpTask.pictogramId} label={currentHelpTask.pictogramLabel || currentHelpTask.title} className="mb-3 w-20 h-20" />}
+              {imageMode && currentHelpTask && <TaskPictograms task={currentHelpTask} compact />}
               {currentHelpTask?.title || 'Sua próxima tarefa'}
             </div>
             <div className="grid gap-2">
@@ -296,7 +296,7 @@ export const TeaHome: React.FC<Props> = ({
         </div>
       )}
 
-      {imageMode && tasks.some((task) => task.pictogramId) && (
+      {imageMode && tasks.some((task) => task.pictograms?.length) && (
         <p className="text-center text-[11px] opacity-60 mt-6">
           Pictogramas: Sergio Palao — <a className="underline" href="https://arasaac.org/terms-of-use" target="_blank" rel="noreferrer">ARASAAC</a> (Governo de Aragão), licença CC BY-NC-SA.
         </p>

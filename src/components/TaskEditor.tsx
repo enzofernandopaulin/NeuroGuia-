@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import type { PictogramSelection, RoutineTask } from '../types';
 import { PictogramPicker } from './PictogramPicker';
-import { getArasaacImageUrl } from '../services/arasaacService';
 
 type Changes = { title: string; task_time: string | null; scheduled_date: string; steps: string[];
   recurrence_days: number[]; duration_minutes: number | null; pictogram_provider: 'arasaac' | null;
-  pictogram_id: number | null; pictogram_label: string | null };
+  pictogram_id: number | null; pictogram_label: string | null;
+  pictograms: {provider:'arasaac';id:number;label:string}[] };
 
 export function TaskEditor({ task, onClose, onSave }: { task: RoutineTask; onClose: () => void; onSave: (id: string, changes: Changes) => Promise<void> }) {
   const [title, setTitle] = useState(task.title);
@@ -14,10 +14,7 @@ export function TaskEditor({ task, onClose, onSave }: { task: RoutineTask; onClo
   const [steps, setSteps] = useState((task.steps || []).join('\n'));
   const [days, setDays] = useState(task.recurrenceDays || []);
   const [duration, setDuration] = useState(task.durationMinutes ? String(task.durationMinutes) : '');
-  const [picture, setPicture] = useState<PictogramSelection | null>(task.pictogramId ? {
-    provider: 'arasaac', id: task.pictogramId, label: task.pictogramLabel || task.title,
-    imageUrl: getArasaacImageUrl(task.pictogramId),
-  } : null);
+  const [pictures, setPictures] = useState<PictogramSelection[]>(task.pictograms || []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,8 +26,9 @@ export function TaskEditor({ task, onClose, onSave }: { task: RoutineTask; onClo
       await onSave(task.id, { title: title.trim(), task_time: time || null, scheduled_date: date,
         steps: steps.split('\n').map((step) => step.trim()).filter(Boolean), recurrence_days: days,
         duration_minutes: duration ? Number(duration) : null,
-        pictogram_provider: picture?.provider || null, pictogram_id: picture?.id || null,
-        pictogram_label: picture?.label || null });
+        pictograms: pictures.map(({provider,id,label}) => ({provider,id,label:label.trim().slice(0,120)})),
+        pictogram_provider: pictures[0]?.provider || null, pictogram_id: pictures[0]?.id || null,
+        pictogram_label: pictures[0]?.label || null });
       onClose();
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível salvar a tarefa.'); }
     finally { setSaving(false); }
@@ -44,7 +42,7 @@ export function TaskEditor({ task, onClose, onSave }: { task: RoutineTask; onClo
       <label className="block">Duração em minutos<input type="number" min="1" max="480" value={duration} onChange={(event) => setDuration(event.target.value)} className="w-full rounded-xl border p-3" /></label>
       <label className="block">Etapas, uma por linha<textarea value={steps} onChange={(event) => setSteps(event.target.value)} className="w-full min-h-24 rounded-xl border p-3" /></label>
       <fieldset><legend>Repetir semanalmente</legend><div className="flex flex-wrap gap-2">{['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((day, index) => <label key={day}><input type="checkbox" checked={days.includes(index)} onChange={() => setDays((current) => current.includes(index) ? current.filter((value) => value !== index) : [...current, index])} /> {day}</label>)}</div></fieldset>
-      <PictogramPicker value={picture} onChange={setPicture} suggestedSearch={title} />
+      <PictogramPicker value={pictures} onChange={setPictures} suggestedSearch={title} />
       {error && <p role="alert" className="text-error">{error}</p>}
       <div className="flex gap-3"><button type="button" onClick={onClose} className="flex-1 rounded-xl border p-3">Cancelar</button><button disabled={saving || !title.trim() || !date} className="flex-1 rounded-xl bg-primary p-3 text-white disabled:opacity-50">{saving ? 'Salvando...' : 'Salvar alterações'}</button></div>
     </form>

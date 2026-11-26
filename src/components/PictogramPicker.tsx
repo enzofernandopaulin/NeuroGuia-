@@ -4,8 +4,8 @@ import type { PictogramSelection } from '../types';
 import { PictogramImage } from './PictogramImage';
 
 interface Props {
-  value: PictogramSelection | null;
-  onChange: (value: PictogramSelection | null) => void;
+  value: PictogramSelection[];
+  onChange: (value: PictogramSelection[]) => void;
   suggestedSearch?: string;
 }
 
@@ -63,23 +63,22 @@ export const PictogramPicker: React.FC<Props> = ({ value, onChange, suggestedSea
     <div className="rounded-2xl border-2 border-outline-variant p-4 mt-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <strong className="text-sm">Pictograma da tarefa (opcional)</strong>
-          <p className="text-xs text-on-surface-variant mt-0.5">Pesquise uma imagem de apoio visual no ARASAAC.</p>
+          <strong className="text-sm">Pictogramas da tarefa (opcional, até 8)</strong>
+          <p className="text-xs text-on-surface-variant mt-0.5">Adicione imagens e organize na ordem em que o estudante deve vê-las.</p>
           <p className="text-[11px] text-on-surface-variant mt-0.5">Use somente nomes de atividades; não informe dados pessoais.</p>
         </div>
-        {value && (
-          <button type="button" onClick={() => onChange(null)} className="rounded-xl border border-error text-error px-3 py-2 text-xs font-bold">
-            Remover
-          </button>
-        )}
+        <span className="text-xs">{value.length}/8</span>
       </div>
 
-      {value && (
-        <div className="mt-3 flex items-center gap-3 rounded-2xl bg-surface-container-low p-3" aria-live="polite">
-          <PictogramImage id={value.id} label={value.label} />
-          <div><strong className="block">{value.label}</strong><span className="text-xs opacity-65">Pictograma selecionado</span></div>
-        </div>
-      )}
+      {value.length > 0 && <ol className="mt-3 space-y-2" aria-label="Pictogramas selecionados">
+        {value.map((item, index) => <li key={item.id} className="flex items-center gap-2 rounded-2xl bg-surface-container-low p-2">
+          <span className="font-bold">{index + 1}.</span><PictogramImage id={item.id} label={item.label} className="w-14 h-14" />
+          <span className="flex-1 min-w-0 truncate text-sm" title={item.label}>{item.label}</span>
+          <button type="button" disabled={index === 0} aria-label={`Mover ${item.label} para cima`} onClick={() => { const next = [...value]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; onChange(next); }} className="rounded-lg border px-2 py-1 disabled:opacity-40">↑</button>
+          <button type="button" disabled={index === value.length - 1} aria-label={`Mover ${item.label} para baixo`} onClick={() => { const next = [...value]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; onChange(next); }} className="rounded-lg border px-2 py-1 disabled:opacity-40">↓</button>
+          <button type="button" aria-label={`Remover ${item.label}`} onClick={() => onChange(value.filter((selected) => selected.id !== item.id))} className="rounded-lg border border-error text-error px-2 py-1">Remover</button>
+        </li>)}
+      </ol>}
 
       <div className="flex gap-2 mt-3">
         <input
@@ -106,14 +105,15 @@ export const PictogramPicker: React.FC<Props> = ({ value, onChange, suggestedSea
       {results.length > 0 && (
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-2 max-h-72 overflow-y-auto" role="list" aria-label="Resultados de pictogramas">
           {results.map((item) => {
-            const selected = value?.id === item.id;
+            const selected = value.some((picture) => picture.id === item.id);
             return (
               <button
                 type="button"
                 key={item.id}
-                onClick={() => onChange(item)}
+                onClick={() => onChange(selected ? value.filter((picture) => picture.id !== item.id) : value.length < 8 ? [...value, item] : value)}
+                disabled={!selected && value.length >= 8}
                 aria-pressed={selected}
-                className={`rounded-2xl border-2 p-2 text-center ${selected ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white hover:border-primary'}`}
+                className={`rounded-2xl border-2 p-2 text-center disabled:opacity-40 ${selected ? 'border-primary bg-primary-fixed' : 'border-outline-variant bg-white hover:border-primary'}`}
               >
                 <img src={item.imageUrl} alt="" loading="lazy" className="w-full aspect-square object-contain rounded-xl" />
                 <span className="mt-1 block truncate text-[11px] font-bold" title={item.label}>{item.label}</span>

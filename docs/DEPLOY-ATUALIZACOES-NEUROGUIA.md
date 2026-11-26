@@ -10,6 +10,10 @@ Branch: `atualizações-neuroguia`. Estas mudanças ainda não autorizam executa
 4. Criar implantação de prévia da branch no Vercel com as variáveis de ambiente já usadas pelo projeto (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`). Testar cadastro/login, onboarding completo, seleção e troca de pictograma, criação/edição/exclusão de tarefa, recorrência em dias diferentes, conclusão independente por dia, acesso estudante, tutor e convites.
 5. Após validação e autorização, integrar a branch à main e publicar a versão de produção no Vercel. Conferir o domínio e os logs de implantação.
 
+## Pictogramas múltiplos (26/11/2026)
+
+Antes de publicar a atualização da branch, aplicar `supabase/migrations/20261126_multiple_task_pictograms.sql` no mesmo projeto. A migração adiciona `routine_tasks.pictograms` (lista ordenada de até oito), copia o pictograma atual de cada tarefa e mantém os campos `pictogram_*` antigos para o primeiro item. Verificar `select count(*) from public.routine_tasks where pictogram_id is not null and jsonb_array_length(pictograms) = 0;` (esperado: zero) e testar a seleção, reordenação e remoção na prévia. A cópia interna anterior das tarefas permanece em `neuroguia_backup_20261126.routine_tasks`.
+
 ## Recuperação
 
 Se a interface falhar, reverter a implantação Vercel para a anterior. A nova tabela pode permanecer sem afetar a versão anterior. Não apagar a tabela ou a cópia das conclusões; usar backup para recuperação se necessário. Clientes antigos continuam a usar `routine_tasks.completed` e podem mostrar estado diferente durante uma implantação mista, portanto concluir a troca de versão sem demora.
