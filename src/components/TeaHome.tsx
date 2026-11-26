@@ -33,10 +33,15 @@ export const TeaHome: React.FC<Props> = ({
   const supportPreset = getSupportPreset(profile.supportLevel);
 
   const soundSensitive = profile.sensoryTriggers.includes('sons');
-  const visualSensitive = profile.softVisualMode;
+  const visualSensitive = profile.softVisualMode || supportPreset.softVisualMode;
   const reduceMotion = profile.sensoryTriggers.includes('animacoes');
-  const imageMode = profile.communicationPreference === 'imagem' || profile.communicationPreference === 'texto-imagem';
+  const imageMode = profile.communicationPreference === 'imagem' || profile.communicationPreference === 'texto-imagem' || profile.communicationPreference === 'nao-sei';
   const audioMode = profile.communicationPreference === 'audio' && !soundSensitive;
+  const limitedInformation = profile.sensoryTriggers.includes('excesso-informacao');
+  const laterTaskLimit = limitedInformation || profile.autonomy === 'acompanhamento-total' ? 0
+    : profile.autonomy === 'orientacao-frequente' ? Math.min(1, supportPreset.maxLaterTasks)
+    : profile.autonomy === 'orientacao-etapas' ? Math.min(2, supportPreset.maxLaterTasks)
+    : supportPreset.maxLaterTasks;
   const isResponsiblePreview = role === 'responsavel';
 
   const currentHelpTask = activeTask || nextTask;
@@ -133,8 +138,8 @@ export const TeaHome: React.FC<Props> = ({
   const visibleLater = useMemo(
     () => remaining
       .filter((task) => task.id !== activeTask?.id && task.id !== nextTask?.id)
-      .slice(0, supportPreset.maxLaterTasks),
-    [remaining, activeTask?.id, nextTask?.id, supportPreset.maxLaterTasks]
+      .slice(0, laterTaskLimit),
+    [remaining, activeTask?.id, nextTask?.id, laterTaskLimit]
   );
 
   const surface = visualSensitive ? 'bg-[#fafaf7] border-[#d8d8d0]' : 'bg-white border-outline-variant/60';
@@ -165,6 +170,10 @@ export const TeaHome: React.FC<Props> = ({
         </div>
       )}
 
+      {profile.communicationPreference === 'audio' && !soundSensitive && !('speechSynthesis' in window) && (
+        <p role="status" className="rounded-2xl border p-4 mb-4">Este dispositivo não oferece leitura por áudio. As instruções continuam disponíveis em texto.</p>
+      )}
+
       {audioMode && !soundSensitive && (
         <button onClick={() => setAudioEnabled(!audioEnabled)} className={`w-full rounded-2xl border p-4 mb-4 text-left ${surface}`}>
           <strong>{audioEnabled ? '🔊 Áudio ativado' : '🔇 Áudio desativado'}</strong>
@@ -174,7 +183,7 @@ export const TeaHome: React.FC<Props> = ({
 
       {profile.routineChangeWarning && routineChanges.filter((item) => !item.acknowledged).map((notice) => (
         <div key={notice.id} className={`rounded-2xl border p-4 mb-4 ${visualSensitive ? 'bg-[#f1eee4] border-[#c9c3ae]' : 'bg-primary-fixed border-primary-fixed-dim'}`}>
-          <div className="flex gap-3 items-start"><span className="material-symbols-outlined">notification_important</span><div className="flex-1"><strong>{notice.title}</strong><p className="text-sm opacity-75 mt-1">{notice.description}</p><p className="text-xs opacity-60 mt-2">{new Date(notice.effectiveAt).toLocaleString('pt-BR')}</p></div></div>
+          <div className="flex gap-3 items-start"><span className="material-symbols-outlined">notification_important</span><div className="flex-1"><strong>{profile.routineChangeDifficulty === 'frequentemente' ? 'Mudança na rotina: ' : ''}{notice.title}</strong><p className="text-sm opacity-75 mt-1">{notice.description}</p><p className="text-xs opacity-60 mt-2">{new Date(notice.effectiveAt).toLocaleString('pt-BR')}</p></div></div>
           <button onClick={() => isResponsiblePreview ? setHelpMessage('Confirmação simulada. O aviso continua pendente para o estudante.') : onAcknowledgeChange(notice.id)} className="mt-3 rounded-xl bg-white/80 px-4 py-2 text-sm font-extrabold">{isResponsiblePreview ? 'Simular confirmação' : 'Entendi a mudança'}</button>
         </div>
       ))}

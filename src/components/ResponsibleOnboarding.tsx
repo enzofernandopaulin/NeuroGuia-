@@ -44,7 +44,7 @@ export const ResponsibleOnboarding: React.FC<Props> = ({ initialProfile, onBack,
   };
 
   const finish = async () => {
-    const visualSensitive = profile.sensoryTriggers.some((item) =>
+    const visualSensitive = supportPreset.softVisualMode || profile.sensoryTriggers.some((item) =>
       ['cores', 'brilho', 'animacoes', 'excesso-informacao'].includes(item)
     );
 
@@ -60,7 +60,7 @@ export const ResponsibleOnboarding: React.FC<Props> = ({ initialProfile, onBack,
       await onComplete({
         ...profile,
         softVisualMode: visualSensitive,
-        stepByStep: needsSteps,
+        stepByStep: needsSteps || supportPreset.stepByStep,
         helpButton: true,
         routineChangeWarning: profile.routineChangeDifficulty !== 'nao',
       });

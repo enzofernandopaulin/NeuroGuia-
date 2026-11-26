@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { requireSupabase, requireStudentSupabase } from '../lib/supabase';
 import { PictogramSelection, RoutineChangeNotice, RoutineTask, SupportRequest, SupportRequestKind } from '../types';
+import { localDate, occursOn } from '../lib/routineDates';
 
 type TaskRow = {
   id: string; profile_id: string; title: string; task_time: string | null;
@@ -25,15 +26,21 @@ const mapTask = (row: TaskRow): RoutineTask => ({
   pictogramLabel: row.pictogram_label ?? null,
 });
 
-async function listTasksWith(client: SupabaseClient, profileId: string): Promise<RoutineTask[]> {
+async function listTasksWith(client: SupabaseClient, profileId: string, date = localDate()): Promise<RoutineTask[]> {
   const { data, error } = await client.from('routine_tasks').select('*').eq('profile_id', profileId).eq('archived', false)
     .order('scheduled_date', { ascending: true }).order('sort_order', { ascending: true }).order('task_time', { ascending: true, nullsFirst: false });
   if (error) throw error;
-  return (data || []).map((row) => mapTask(row as TaskRow));
+  const tasks = (data || []).map((row) => mapTask(row as TaskRow)).filter((task) => occursOn(task, date));
+  if (!tasks.length) return tasks;
+  const { data: completions, error: completionError } = await client.from('routine_task_completions')
+    .select('task_id').eq('profile_id', profileId).eq('occurrence_date', date);
+  if (completionError) throw completionError;
+  const completedIds = new Set((completions || []).map((item) => item.task_id));
+  return tasks.map((task) => ({ ...task, completed: completedIds.has(task.id) }));
 }
 
-export const listResponsibleTasks = (profileId: string) => listTasksWith(requireSupabase(), profileId);
-export const listStudentTasks = (profileId: string) => listTasksWith(requireStudentSupabase(), profileId);
+export const listResponsibleTasks = (profileId: string, date?: string) => listTasksWith(requireSupabase(), profileId, date);
+export const listStudentTasks = (profileId: string, date?: string) => listTasksWith(requireStudentSupabase(), profileId, date);
 
 export async function createRoutineTask(profileId: string, title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays: number[] = [], durationMinutes?: number | null, pictogram?: PictogramSelection | null) {
   const client = requireSupabase();
@@ -69,14 +76,17 @@ export async function archiveRoutineTask(taskId: string) {
   if (error) throw error;
 }
 
-export async function setTaskCompleted(taskId: string, completed: boolean, student = false) {
+export async function setTaskCompleted(taskId: string, completed: boolean, date: string, student = false, profileId?: string) {
   const client = student ? requireStudentSupabase() : requireSupabase();
   if (student) {
-    const { error } = await client.rpc('set_student_task_completed', { p_task_id: taskId, p_completed: completed });
+    const { error } = await client.rpc('set_student_task_occurrence_completed', { p_task_id: taskId, p_date: date, p_completed: completed });
     if (error) throw error;
     return;
   }
-  const { error } = await client.from('routine_tasks').update({ completed }).eq('id', taskId);
+  if (!profileId) throw new Error('Perfil do estudante não encontrado.');
+  const { error } = completed
+    ? await client.from('routine_task_completions').upsert({ task_id: taskId, profile_id: profileId, occurrence_date: date }, { onConflict: 'task_id,occurrence_date' })
+    : await client.from('routine_task_completions').delete().eq('task_id', taskId).eq('profile_id', profileId).eq('occurrence_date', date);
   if (error) throw error;
 }
 

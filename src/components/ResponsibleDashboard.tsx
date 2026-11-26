@@ -1,19 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GameProgress, PictogramSelection, ProfileOption, RoutineChangeNotice, RoutineTask, SupportRequest, TeaProfile } from '../types';
 import { PictogramImage } from './PictogramImage';
 import { PictogramPicker } from './PictogramPicker';
+import { TaskEditor } from './TaskEditor';
+import { localDate } from '../lib/routineDates';
 
 interface Props {
   responsibleName: string;
   profiles: ProfileOption[];
   activeProfileId: string;
+  selectedDate: string;
+  onSelectDate: (date: string) => Promise<void>;
   onSelectProfile: (profile: ProfileOption) => Promise<void>;
   onAddProfile: () => void;
   profile: TeaProfile;
   tasks: RoutineTask[];
   onToggleTask: (id: string) => void;
   onAddTask: (title: string, time: string, steps: string[], scheduledDate?: string, recurrenceDays?: number[], durationMinutes?: number | null, pictogram?: PictogramSelection | null) => Promise<void> | void;
-  onUpdateTask: (id: string, changes: {title?: string; task_time?: string | null; steps?: string[]; duration_minutes?: number | null; pictogram_provider?: 'arasaac' | null; pictogram_id?: number | null; pictogram_label?: string | null}) => Promise<void>;
+  onUpdateTask: (id: string, changes: {title?: string; task_time?: string | null; scheduled_date?: string; recurrence_days?: number[]; steps?: string[]; duration_minutes?: number | null; pictogram_provider?: 'arasaac' | null; pictogram_id?: number | null; pictogram_label?: string | null}) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
   onEditProfile: () => void;
   onOpenTeaView: () => void;
@@ -27,11 +31,13 @@ interface Props {
   onResolveRequest: (id: string) => Promise<void>;
   onCreateRoutineChange: (title: string, description: string, effectiveAt: string) => Promise<void>;
   onInviteTutor: (email: string) => Promise<void>;
+  tutorLinks: {id: string; email: string}[];
+  onRemoveTutor: (id: string) => Promise<void>;
 }
 
 export const ResponsibleDashboard: React.FC<Props> = ({
   responsibleName,
-  profiles, activeProfileId, onSelectProfile, onAddProfile,
+  profiles, activeProfileId, selectedDate, onSelectDate, onSelectProfile, onAddProfile,
   profile,
   tasks,
   onToggleTask,
@@ -49,17 +55,17 @@ export const ResponsibleDashboard: React.FC<Props> = ({
   onResolveRequest,
   onCreateRoutineChange,
   onInviteTutor,
+  tutorLinks, onRemoveTutor,
 }) => {
   const [title, setTitle] = useState('');
   const [time, setTime] = useState('');
   const [stepsText, setStepsText] = useState('');
-  const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().slice(0,10));
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0,10));
+  const [scheduledDate, setScheduledDate] = useState(localDate);
   const [recurrenceDays, setRecurrenceDays] = useState<number[]>([]);
   const [durationMinutes, setDurationMinutes] = useState('');
   const [pictogram, setPictogram] = useState<PictogramSelection | null>(null);
   const [savingTask, setSavingTask] = useState(false);
-  const [editingPictogramTaskId, setEditingPictogramTaskId] = useState<string | null>(null);
+  const [editingTask, setEditingTask] = useState<RoutineTask | null>(null);
   const [pin, setPin] = useState('');
   const [tutorEmail, setTutorEmail] = useState('');
   const [changeTitle, setChangeTitle] = useState('');
@@ -69,7 +75,9 @@ export const ResponsibleDashboard: React.FC<Props> = ({
   const [confirmDeleteTask, setConfirmDeleteTask] = useState<string | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState(false);
 
-  const visibleTasks = tasks.filter((task) => !task.scheduledDate || task.scheduledDate === selectedDate || task.recurrenceDays?.includes(new Date(`${selectedDate}T12:00:00`).getDay()));
+  useEffect(() => { setScheduledDate(selectedDate); }, [selectedDate, activeProfileId]);
+
+  const visibleTasks = tasks;
   const completed = visibleTasks.filter((task) => task.completed).length;
 
   const add = async () => {
@@ -85,6 +93,7 @@ export const ResponsibleDashboard: React.FC<Props> = ({
       setTitle('');
       setTime('');
       setStepsText('');
+      setRecurrenceDays([]);
       setDurationMinutes('');
       setPictogram(null);
       setFeedback('Tarefa adicionada à rotina.');
@@ -92,21 +101,6 @@ export const ResponsibleDashboard: React.FC<Props> = ({
       setFeedback(error instanceof Error ? error.message : 'Não foi possível adicionar a tarefa.');
     } finally {
       setSavingTask(false);
-    }
-  };
-
-  const changeTaskPictogram = async (taskId: string, selected: PictogramSelection | null) => {
-    setFeedback('');
-    try {
-      await onUpdateTask(taskId, {
-        pictogram_provider: selected?.provider || null,
-        pictogram_id: selected?.id || null,
-        pictogram_label: selected?.label || null,
-      });
-      setEditingPictogramTaskId(null);
-      setFeedback(selected ? 'Pictograma da tarefa atualizado.' : 'Pictograma removido da tarefa.');
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'Não foi possível atualizar o pictograma.');
     }
   };
 
@@ -156,10 +150,10 @@ export const ResponsibleDashboard: React.FC<Props> = ({
         <section className="lg:col-span-2 bg-white rounded-3xl border border-outline-variant/60 p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-extrabold">Hoje</h2>
+              <h2 className="text-xl font-extrabold">Rotina de {selectedDate === localDate() ? 'hoje' : selectedDate}</h2>
               <p className="text-sm text-on-surface-variant">{completed} de {visibleTasks.length} tarefas concluídas</p>
             </div>
-            <input aria-label="Data da rotina" type="date" value={selectedDate} onChange={(e)=>setSelectedDate(e.target.value)} className="rounded-xl border p-2" />
+            <input aria-label="Data da rotina" type="date" value={selectedDate} onChange={(e)=>{ void onSelectDate(e.target.value).catch((error) => setFeedback(error instanceof Error ? error.message : 'Não foi possível carregar a data.')); }} className="rounded-xl border p-2" />
           </div>
 
           <div className="space-y-3">
@@ -172,11 +166,9 @@ export const ResponsibleDashboard: React.FC<Props> = ({
                   <div className={`font-bold ${task.completed ? 'line-through opacity-60' : ''}`}>{task.title}</div>
                   <div className="text-xs text-on-surface-variant mt-1">{task.time} • {task.category}{task.durationMinutes ? ` • ${task.durationMinutes} min` : ''}</div>
                 </div>
-                <button onClick={async() => { const nextTitle = window.prompt('Novo nome da tarefa:', task.title); if (nextTitle?.trim()) await onUpdateTask(task.id,{title:nextTitle.trim()}); }} className="rounded-xl border px-3 py-2 text-sm font-bold">Editar</button>
-                <button onClick={() => setEditingPictogramTaskId((current) => current === task.id ? null : task.id)} className="rounded-xl border border-primary text-primary px-3 py-2 text-sm font-bold">Pictograma</button>
+                <button onClick={() => setEditingTask(task)} className="rounded-xl border px-3 py-2 text-sm font-bold">Editar tarefa e pictograma</button>
                 <button onClick={() => setConfirmDeleteTask(task.id)} className="rounded-xl border border-error text-error px-3 py-2 text-sm font-bold">Excluir</button>
               </div>
-              {editingPictogramTaskId === task.id && <PictogramPicker value={task.pictogramId ? { provider: 'arasaac', id: task.pictogramId, label: task.pictogramLabel || task.title, imageUrl: '' } : null} onChange={(selected) => changeTaskPictogram(task.id, selected)} suggestedSearch={task.title} />}
               </div>
             ))}
           </div>
@@ -218,6 +210,7 @@ export const ResponsibleDashboard: React.FC<Props> = ({
           <p className="text-sm text-on-surface-variant mt-1">Autorize um tutor ou profissional pelo e-mail da conta dele.</p>
           <input value={tutorEmail} onChange={(e) => setTutorEmail(e.target.value)} type="email" placeholder="email@exemplo.com" className="w-full mt-4 rounded-2xl border-2 border-outline-variant p-4" />
           <button onClick={invite} className="mt-2 rounded-2xl bg-tertiary text-white font-extrabold px-5 py-3">Adicionar tutor</button>
+          <ul className="mt-3 space-y-2">{tutorLinks.map((link) => <li key={link.id} className="flex items-center justify-between gap-2 rounded-xl bg-surface-container-low p-3 text-sm"><span className="break-all">{link.email}</span><button className="font-bold text-error" onClick={async () => { try { await onRemoveTutor(link.id); setFeedback('Tutor removido da rede de apoio.'); } catch (error) { setFeedback(error instanceof Error ? error.message : 'Não foi possível remover o tutor.'); } }}>Remover</button></li>)}</ul>
         </section>
       </div>
 
@@ -230,7 +223,8 @@ export const ResponsibleDashboard: React.FC<Props> = ({
         {routineChanges.length > 0 && <p className="text-xs text-on-surface-variant mt-3">{routineChanges.length} aviso(s) registrado(s).</p>}
       </section>
 
-      {confirmDeleteTask && <div className="fixed inset-0 bg-black/40 z-50 grid place-items-center p-5"><div className="bg-white rounded-3xl p-6 max-w-sm w-full"><h2 className="text-xl font-extrabold">Excluir tarefa?</h2><p className="text-sm mt-2 opacity-70">Ela será arquivada e não aparecerá mais na rotina.</p><div className="flex gap-2 mt-5"><button onClick={() => setConfirmDeleteTask(null)} className="flex-1 rounded-2xl border py-3 font-bold">Cancelar</button><button onClick={async()=>{await onDeleteTask(confirmDeleteTask);setConfirmDeleteTask(null);}} className="flex-1 rounded-2xl bg-error text-white py-3 font-bold">Excluir</button></div></div></div>}
+      {editingTask && <TaskEditor task={editingTask} onClose={() => setEditingTask(null)} onSave={onUpdateTask} />}
+      {confirmDeleteTask && <div className="fixed inset-0 bg-black/40 z-50 grid place-items-center p-5"><div className="bg-white rounded-3xl p-6 max-w-sm w-full"><h2 className="text-xl font-extrabold">Excluir tarefa?</h2><p className="text-sm mt-2 opacity-70">Ela será arquivada e não aparecerá mais na rotina.</p><div className="flex gap-2 mt-5"><button onClick={() => setConfirmDeleteTask(null)} className="flex-1 rounded-2xl border py-3 font-bold">Cancelar</button><button onClick={async()=>{try {await onDeleteTask(confirmDeleteTask);setConfirmDeleteTask(null);} catch(error) {setFeedback(error instanceof Error ? error.message : 'Não foi possível excluir.');}}} className="flex-1 rounded-2xl bg-error text-white py-3 font-bold">Excluir</button></div></div></div>}
       {confirmRevoke && <div className="fixed inset-0 bg-black/40 z-50 grid place-items-center p-5"><div className="bg-white rounded-3xl p-6 max-w-sm w-full"><h2 className="text-xl font-extrabold">Revogar acesso?</h2><p className="text-sm mt-2 opacity-70">O código e as sessões atuais deixarão de funcionar. Um novo acesso poderá ser criado depois.</p><div className="flex gap-2 mt-5"><button onClick={() => setConfirmRevoke(false)} className="flex-1 rounded-2xl border py-3 font-bold">Cancelar</button><button onClick={async()=>{await onRevokeAccess();setConfirmRevoke(false);}} className="flex-1 rounded-2xl bg-error text-white py-3 font-bold">Revogar</button></div></div></div>}
 
       <section className="mt-5 bg-white rounded-3xl border border-outline-variant/60 p-5">

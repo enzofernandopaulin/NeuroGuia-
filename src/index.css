@@ -126,3 +126,15 @@
   }
 }
 
+[data-reduce-motion='true'] *, [data-reduce-motion='true'] *::before, [data-reduce-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+[data-soft-visual='true'] { background: #f5f5ef; color: #273029; }
+[data-soft-visual='true'] .bg-white { background-color: #fafaf7; }
+[data-soft-visual='true'] .shadow-sm { box-shadow: none; }
+[data-age-group='crianca'] main button { min-height: 44px; }
+[data-age-group='crianca'] main { line-height: 1.55; }
+
